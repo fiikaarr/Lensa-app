@@ -1,0 +1,40 @@
+<svg width="256" height="256" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradasi Background Merah Korporat -->
+    <linearGradient id="redBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F43F5E"/>
+      <stop offset="100%" stop-color="#BE123C"/>
+    </linearGradient>
+    
+    <!-- Gradasi Huruf L Putih Tulang -->
+    <linearGradient id="whiteText" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E2E2E0"/>
+    </linearGradient>
+    
+    <!-- Gradasi Titik Emerald -->
+    <radialGradient id="emeraldGrad" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </radialGradient>
+    
+    <!-- Clip Path untuk Titik Sudut -->
+    <clipPath id="cornerClip">
+      <rect x="2" y="2" width="60" height="60" rx="18"/>
+    </clipPath>
+  </defs>
+
+  <!-- Kotak Dasar Melengkung -->
+  <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#redBg)" stroke="#881337" stroke-width="1"/>
+  
+  <!-- Huruf L Putih Tulang -->
+  <text x="32" y="47" font-family="sans-serif" font-weight="900" font-size="38" fill="url(#whiteText)" text-anchor="middle">L</text>
+  
+  <!-- Titik Emerald di Pojok Kanan Atas -->
+  <g clip-path="url(#cornerClip)">
+    <g transform="translate(50, 14)">
+      <circle cx="0" cy="0" r="5.5" fill="url(#emeraldGrad)"/>
+      <circle cx="-1.5" cy="-1.5" r="1.2" fill="#FFFFFF" opacity="0.7"/>
+    </g>
+  </g>
+</svg>
