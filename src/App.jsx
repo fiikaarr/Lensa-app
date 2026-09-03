@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 import Overview from './pages/Overview';
@@ -58,6 +58,8 @@ function MainLayout({ userRole, onLogout }) {
             <Route path="/coaching" element={<Coaching />} />
             <Route path="/tryout" element={<Tryout />} />
             <Route path="/import" element={<ImportData />} />
+            {/* Jika akses rute yang tidak dikenal, lempar kembali ke overview */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
       </main>
@@ -66,7 +68,6 @@ function MainLayout({ userRole, onLogout }) {
 }
 
 export default function App() {
-  // Mengecek status login dari localStorage agar persisten saat refresh
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     return localStorage.getItem('sqIsLoggedIn') === 'true';
   });
@@ -90,11 +91,15 @@ export default function App() {
 
   return (
     <Router>
-      {isLoggedIn ? (
-        <MainLayout userRole={userRole} onLogout={handleLogout} />
-      ) : (
-        <Login onLoginSuccess={handleLoginSuccess} />
-      )}
+      <Routes>
+        {/* Jika belum login, arahkan semua rute langsung ke halaman Login */}
+        {!isLoggedIn ? (
+          <Route path="*" element={<Login onLoginSuccess={handleLoginSuccess} />} />
+        ) : (
+          /* Jika sudah login, tampilkan MainLayout yang mencakup seluruh rute menu */
+          <Route path="/*" element={<MainLayout userRole={userRole} onLogout={handleLogout} />} />
+        )}
+      </Routes>
     </Router>
   );
 }

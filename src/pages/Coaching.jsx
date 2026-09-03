@@ -78,7 +78,6 @@ export default function Coaching() {
     updateCascadeUnits(filterRegion);
   }, [filterRegion, csrDatabase]);
 
-  // Reset ke halaman 1 setiap kali filter atau pencarian berubah
   useEffect(() => {
     setCurrentPage(1);
   }, [filterPeriode, filterRegion, filterUnit, searchQuery, statusSortState]);
@@ -102,7 +101,6 @@ export default function Coaching() {
       if (coachErr) throw coachErr;
       let coachData = coachRes || [];
 
-      // Otomatisasi Tapping ke Coaching (Mulai September 2026, Nilai < 85)
       const { data: tapRes, error: tapErr } = await supabase.from('nilai_tapping')
         .select('*')
         .gte('tanggal_assessor', '2026-09-01')
@@ -318,29 +316,43 @@ export default function Coaching() {
     }
   };
 
-  const handleDeleteRecord = () => {
-    const role = (localStorage.getItem('sqUserRole') || 'Viewer').trim().toUpperCase();
-    if (role !== 'SQ') {
-      showToast("Akses Terbatas", "Hanya role SQ yang dapat menghapus data.", 'warning');
+  // Fungsi Hapus Langsung Tanpa Validasi .select() yang memicu error RLS/Array
+  const handleDeleteRecord = (targetRow = null) => {
+    const role = (localStorage.getItem('sqUserRole') || '').trim().toUpperCase();
+    
+    if (role !== 'SQ' && role !== 'SERVICE QUALITY') {
+      showToast("Akses Ditolak", "Fitur hapus data hanya dapat diakses oleh akun dengan role Service Quality (SQ).", 'warning');
+      return;
+    }
+
+    const rowToDelete = targetRow || editData;
+    if (!rowToDelete.id) {
+      showToast("Error", "ID Data tidak valid.", 'error');
       return;
     }
 
     setConfirmModal({
       show: true,
       title: "Hapus Data Coaching",
-      msg: "Apakah Anda yakin ingin menghapus data ini beserta file di Google Drive?",
+      msg: "Apakah Anda yakin ingin menghapus data ini dari database?",
       onConfirm: async () => {
         try {
-          if (editData.linkEviden) await deleteFileFromDrive(editData.linkEviden);
+          if (rowToDelete.fileUrl || rowToDelete.link_eviden) {
+            await deleteFileFromDrive(rowToDelete.fileUrl || rowToDelete.link_eviden);
+          }
           
-          const { error } = await supabase.from('database_coaching').delete().eq('id', editData.id);
+          const { error } = await supabase
+            .from('database_coaching')
+            .delete()
+            .eq('id', rowToDelete.id);
+
           if (error) throw error;
           
           setShowEditModal(false);
           loadCoachData();
-          showToast("Terhapus!", "Data berhasil dihapus.", 'success');
+          showToast("Terhapus!", "Data berhasil dihapus secara permanen.", 'success');
         } catch (err) {
-          showToast("Gagal!", err.message, 'error');
+          showToast("Gagal Hapus!", err.message, 'error');
         }
       }
     });
@@ -352,7 +364,6 @@ export default function Coaching() {
     else setStatusSortState('none');
   };
 
-  // Filter & Sort Logic
   let filteredList = coachList.filter(row => {
     const matchPeriode = !filterPeriode || (row.tanggal && row.tanggal.startsWith(filterPeriode));
     const matchRegion = filterRegion === 'ALL' || row.region === filterRegion;
@@ -367,7 +378,6 @@ export default function Coaching() {
     filteredList.sort((a, b) => (b.status || 'Open').localeCompare(a.status || 'Open'));
   }
 
-  // Pagination Logic
   const totalItems = filteredList.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -385,7 +395,6 @@ export default function Coaching() {
   const closedCount = filteredList.filter(i => (i.status || '').trim().toLowerCase() === 'closed').length;
   const closedRate = totalSesi > 0 ? ((closedCount / totalSesi) * 100).toFixed(1) + '%' : '0%';
 
-  // Render Charts Effect
   useEffect(() => {
     if (chartTypeRef.current) {
       if (typeInst.current) typeInst.current.destroy();
@@ -467,8 +476,6 @@ export default function Coaching() {
 
   return (
     <div className="space-y-6 font-sans relative">
-      
-      {/* Header & Professional Metallic Gray Gradient Filter Bar */}
       <div className="bg-gradient-to-tr from-slate-300 via-slate-200 to-slate-400 p-6 rounded-3xl shadow-[0_15px_35px_-5px_rgba(100,116,139,0.35)] border border-slate-400/80 space-y-4 relative">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="flex items-center space-x-3.5">
@@ -492,14 +499,12 @@ export default function Coaching() {
           </div>
         </div>
 
-        {/* Filter Control Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-4 border-t border-slate-400/70 relative z-40">
           <div>
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Periode (Tahun - Bulan)</label>
             <input type="month" value={filterPeriode} onChange={e => setFilterPeriode(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-slate-400/80 rounded-2xl text-xs font-semibold text-slate-800 shadow-inner focus:outline-none focus:border-purple-600 cursor-pointer" />
           </div>
 
-          {/* Custom Dropdown Region */}
           <div className="relative" ref={regDropdownRef}>
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Region</label>
             <div onClick={() => { setShowRegMenu(!showRegMenu); setShowUnitMenu(false); }} className="w-full px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-2xl text-xs font-semibold text-slate-800 shadow-sm flex items-center justify-between cursor-pointer transition select-none">
@@ -525,7 +530,6 @@ export default function Coaching() {
             )}
           </div>
 
-          {/* Custom Dropdown Unit Name */}
           <div className="relative" ref={unitDropdownRef}>
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Unit Name</label>
             <div onClick={() => { setShowUnitMenu(!showUnitMenu); setShowRegMenu(false); }} className="w-full px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-2xl text-xs font-semibold text-slate-800 shadow-sm flex items-center justify-between cursor-pointer transition select-none">
@@ -561,7 +565,6 @@ export default function Coaching() {
         </div>
       </div>
 
-      {/* Scorecards KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="relative bg-gradient-to-br from-indigo-600 to-indigo-900 p-5 rounded-3xl border border-indigo-500 shadow-[0_12px_25px_-5px_rgba(79,70,229,0.4)] flex items-center justify-between text-white">
           <div><p className="text-[11px] font-black uppercase tracking-wider text-indigo-200">Total Sesi Pembinaan</p><h4 className="text-3xl font-black mt-1 text-white drop-shadow-md">{totalSesi}</h4></div>
@@ -581,7 +584,6 @@ export default function Coaching() {
         </div>
       </div>
 
-      {/* SECTION GRAFIK ANALITIK UTAMA */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-gradient-to-br from-slate-100 via-white to-slate-200 p-6 rounded-3xl border border-slate-300 shadow-[0_10px_25px_-5px_rgba(148,163,184,0.25)]">
           <h4 className="text-sm font-extrabold text-slate-900 mb-4"><i className="fa-solid fa-chart-pie text-indigo-600 mr-2"></i> Proporsi Tipe Pembinaan</h4>
@@ -593,7 +595,6 @@ export default function Coaching() {
         </div>
       </div>
 
-      {/* SECTION GRAFIK TOP 5 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-gradient-to-br from-slate-100 via-white to-slate-200 p-6 rounded-3xl border border-slate-300 shadow-[0_10px_25px_-5px_rgba(148,163,184,0.25)]">
           <h4 className="text-sm font-extrabold text-slate-900 mb-4"><i className="fa-solid fa-ranking-star text-amber-600 mr-2"></i> Top 5 Pembinaan GraPARI</h4>
@@ -605,7 +606,6 @@ export default function Coaching() {
         </div>
       </div>
 
-      {/* Database Tabel & Action Buttons */}
       <div className="bg-gradient-to-br from-slate-100 via-white to-slate-200 p-6 rounded-3xl border border-slate-300 shadow-[0_10px_25px_-5px_rgba(148,163,184,0.25)] space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
           <div className="flex items-center space-x-2">
@@ -624,7 +624,6 @@ export default function Coaching() {
           </div>
         </div>
 
-        {/* Tabel Data */}
         <div className="overflow-x-auto rounded-2xl border border-slate-300 shadow-sm bg-white">
           <table id="coachTableElement" className="w-full text-left border-collapse">
             <thead>
@@ -688,15 +687,28 @@ export default function Coaching() {
                         </button>
                         <button onClick={() => {
                           setEditData({
-                            id: row.id, tanggal: row.tanggal || '', status: row.status || 'Open',
-                            nik: row.nik || '', nama: row.nama || '', region: row.region || '', cluster: row.cluster || '',
-                            unitName: row.unitName || '', job: row.job || '', tipe: row.tipe || 'Coaching',
-                            area: row.area || 'Attitude', rootCause: row.rootCause || row.root_cause || '', 
-                            komitmen: row.actionPlan || row.komitmen || '', linkEviden: row.fileUrl || '', file: null
+                            id: row.id, 
+                            tanggal: row.tanggal || '', 
+                            status: row.status || 'Open',
+                            nik: row.nik || '', 
+                            nama: row.nama || '', 
+                            region: row.region || '', 
+                            cluster: row.cluster || '',
+                            unitName: row.unitName || '', 
+                            job: row.job || '', 
+                            tipe: row.tipe || 'Coaching',
+                            area: row.area || 'Attitude', 
+                            rootCause: row.rootCause || row.root_cause || '', 
+                            komitmen: row.actionPlan || row.komitmen || '', 
+                            linkEviden: row.fileUrl || '', 
+                            file: null
                           });
                           setShowEditModal(true);
                         }} title="Update Data" className="px-3 py-1.5 bg-white hover:bg-amber-500 hover:text-white text-slate-700 rounded-xl text-xs font-bold transition-all duration-200 shadow-sm border border-slate-300 cursor-pointer flex items-center">
                           <i className="fa-solid fa-pen-to-square mr-1"></i> Update
+                        </button>
+                        <button onClick={() => handleDeleteRecord(row)} title="Hapus Langsung" className="w-8 h-8 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center text-xs transition border border-rose-200 shadow-sm cursor-pointer">
+                          <i className="fa-solid fa-trash-can"></i>
                         </button>
                       </div>
                     </td>
@@ -707,7 +719,6 @@ export default function Coaching() {
           </table>
         </div>
 
-        {/* PAGINATION CONTROLS (Maksimal 15 List per Halaman) */}
         {totalItems > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2 px-2 text-xs font-semibold text-slate-600">
             <div>
@@ -739,7 +750,6 @@ export default function Coaching() {
 
       </div>
 
-      {/* MODAL INPUT */}
       {showInputModal && ReactDOM.createPortal(
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-[fadeIn_0.2s_ease-out]">
           <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-[scaleUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
@@ -826,7 +836,6 @@ export default function Coaching() {
         document.body
       )}
 
-      {/* MODAL EDIT */}
       {showEditModal && ReactDOM.createPortal(
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-[fadeIn_0.2s_ease-out]">
           <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-[scaleUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
@@ -896,7 +905,7 @@ export default function Coaching() {
                 )}
               </div>
               <div className="pt-4 border-t flex items-center justify-between">
-                <button type="button" onClick={handleDeleteRecord} className="px-4 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 border border-rose-200 rounded-xl font-bold cursor-pointer transition flex items-center space-x-1.5">
+                <button type="button" onClick={() => handleDeleteRecord(editData)} className="px-4 py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 border border-rose-200 rounded-xl font-bold cursor-pointer transition flex items-center space-x-1.5">
                   <i className="fa-solid fa-trash-can"></i><span>Hapus Data</span>
                 </button>
                 <div className="flex space-x-2">
@@ -910,7 +919,6 @@ export default function Coaching() {
         document.body
       )}
 
-      {/* MODAL VIEW DETAIL */}
       {showViewModal && selectedRecord && ReactDOM.createPortal(
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center z-[99999] p-4 animate-[fadeIn_0.2s_ease-out]">
           <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 animate-[scaleUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">
@@ -1007,9 +1015,8 @@ export default function Coaching() {
         document.body
       )}
 
-      {/* CUSTOM TOAST NOTIFICATION */}
-      {toastInfo.show && (
-        <div className="fixed bottom-6 right-6 z-[999999] bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center space-x-3.5 animate-[fadeIn_0.2s_ease-out]">
+      {toastInfo.show && ReactDOM.createPortal(
+        <div className="fixed bottom-6 right-6 z-[9999999] bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center space-x-3.5 animate-[fadeIn_0.2s_ease-out]">
           <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-sm shadow-inner ${toastInfo.mode === 'error' ? 'bg-rose-500' : toastInfo.mode === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'}`}>
             {toastInfo.mode === 'error' ? <i className="fa-solid fa-xmark"></i> : toastInfo.mode === 'warning' ? <i className="fa-solid fa-triangle-exclamation"></i> : <i className="fa-solid fa-check"></i>}
           </div>
@@ -1017,10 +1024,10 @@ export default function Coaching() {
             <h5 className="text-sm font-black tracking-tight">{toastInfo.title}</h5>
             <p className="text-xs text-slate-300 font-medium mt-0.5">{toastInfo.msg}</p>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* CUSTOM CONFIRM MODAL */}
       {confirmModal.show && ReactDOM.createPortal(
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center z-[999999] p-4 animate-[fadeIn_0.2s_ease-out]">
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl text-xs text-center border border-slate-200 animate-[scaleUp_0.3s_cubic-bezier(0.16,1,0.3,1)]">

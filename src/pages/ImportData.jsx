@@ -5,7 +5,6 @@ import { useAutoAnimate } from '@formkit/auto-animate/react';
 import confetti from 'canvas-confetti';
 
 export default function ImportData({ onNavigate }) {
-  // Proteksi role SQ (Service Quality)
   const userRole = (localStorage.getItem('sqUserRole') || '').trim().toUpperCase();
   const isAuthorized = userRole === 'SQ' || userRole === 'SERVICE QUALITY';
 
@@ -21,23 +20,18 @@ export default function ImportData({ onNavigate }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [btnText, setBtnText] = useState('Mulai Proses Import');
 
-  // Statistik Hasil Import
   const [statSukses, setStatSukses] = useState(0);
   const [statGagal, setStatGagal] = useState(0);
   const [statWaktu, setStatWaktu] = useState('0s');
 
-  // Logs Konsol
   const [logs, setLogs] = useState([{ text: '> Menunggu file dan instruksi import...', type: 'text' }]);
   const consoleLogRef = useRef(null);
 
-  // Riwayat Import Logs dari Supabase & Paginasi
   const [importLogs, setImportLogs] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Hook Auto Animate untuk tabel riwayat yang super smooth
   const [tableBodyRef] = useAutoAnimate();
-
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -329,7 +323,6 @@ export default function ImportData({ onNavigate }) {
     }
   };
 
-  // Fungsi Pemicu Confetti Sukses Merayakan Import Berhasil
   const triggerConfetti = () => {
     confetti({
       particleCount: 120,
@@ -394,6 +387,37 @@ export default function ImportData({ onNavigate }) {
           .upsert(finalPayload, { onConflict: conflictColumns });
 
         if (error) throw error;
+
+        // AUTO-COACHING UNTUK NILAI < 85 (MENGGUNAKAN KOLOM 'tanggal' SESUAI TABEL DATABASE_COACHING)
+        if (jenisData === 'tapping') {
+          const lowPerformers = finalPayload.filter(item => {
+            const nilai = Number(item.total_nilai) || 0;
+            return nilai > 0 && nilai < 85;
+          });
+
+          if (lowPerformers.length > 0) {
+            appendLog(`Mendeteksi ${lowPerformers.length} agen dengan nilai < 85%. Menyinkronkan ke database_coaching...`);
+            
+            const coachingPayload = lowPerformers.map(item => ({
+              nik_csr: item.nik_csr,
+              nama_csr: item.nama_csr,
+              tanggal: item.tanggal_rekaman, // Kolom tabel database_coaching bernama 'tanggal'
+              total_nilai: item.total_nilai,
+              status_coaching: 'Pending',
+              catatan: `Auto-generated dari Tapping tanggal ${item.tanggal_rekaman} karena nilai total (${item.total_nilai}%) di bawah 85%`
+            }));
+
+            const { error: coachingError } = await supabase
+              .from('database_coaching')
+              .upsert(coachingPayload, { onConflict: 'nik_csr,tanggal' });
+
+            if (coachingError) {
+              appendLog(`Warning/Gagal auto-input coaching: ${coachingError.message}`, 'warn');
+            } else {
+              appendLog(`Berhasil menyinkronkan ${lowPerformers.length} data ke database_coaching secara bersih!`, 'success');
+            }
+          }
+        }
       }
 
       const endTime = performance.now();
@@ -404,8 +428,6 @@ export default function ImportData({ onNavigate }) {
       setStatWaktu(`${duration}s`);
 
       appendLog(`Import berhasil diselesaikan dalam ${duration} detik!`, 'success');
-      
-      // Panggil efek confetti meriah karena sukses!
       triggerConfetti();
 
       await saveLogToSupabase(jenisData, selectedFile.name, countSuccess, countFailed, duration, 'Success', null);
@@ -425,7 +447,6 @@ export default function ImportData({ onNavigate }) {
     }
   };
 
-  // Logika Paginasi Tabel Riwayat (Maks 10 list per halaman)
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentLogs = importLogs.slice(indexOfFirstItem, indexOfLastItem);
@@ -435,7 +456,6 @@ export default function ImportData({ onNavigate }) {
 
   return (
     <div className="space-y-6 font-sans relative">
-      {/* Header Bar */}
       <div className="bg-gradient-to-tr from-slate-300 via-slate-200 to-slate-400 p-6 rounded-3xl shadow-md border border-slate-400/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-3.5">
           <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-lg font-bold shadow-md shadow-emerald-600/30">
@@ -448,9 +468,7 @@ export default function ImportData({ onNavigate }) {
         </div>
       </div>
 
-      {/* Area Control & Drag Drop Upload */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Panel Pengaturan Modul & Upload */}
         <div className="lg:col-span-1 bg-white p-6 rounded-3xl border border-slate-300 shadow-sm space-y-5">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">Pilih Jenis Data Modul <span className="text-rose-500">*</span></label>
@@ -539,10 +557,8 @@ export default function ImportData({ onNavigate }) {
           </button>
         </div>
 
-        {/* Panel Hasil & Stat Ringkasan */}
         <div className="lg:col-span-2 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            
             <div className="relative overflow-hidden bg-gradient-to-br from-emerald-400 via-emerald-500 to-teal-700 text-white p-5 rounded-3xl border-t border-emerald-200/50 border-b border-emerald-900/50 shadow-[0_12px_28px_-6px_rgba(16,185,129,0.45)]">
               <div className="relative z-10 flex flex-col justify-between h-full space-y-3">
                 <div className="flex items-center justify-between">
@@ -581,7 +597,6 @@ export default function ImportData({ onNavigate }) {
                 </div>
               </div>
             </div>
-
           </div>
 
           <div className="bg-slate-900 text-slate-200 p-5 rounded-3xl border border-slate-800 shadow-inner space-y-3 font-mono text-xs">
@@ -607,7 +622,6 @@ export default function ImportData({ onNavigate }) {
         </div>
       </div>
 
-      {/* Tabel Riwayat Import (Logs) dengan Auto Animate & Paginasi 10 List per Halaman */}
       <div className="bg-white p-6 rounded-3xl border border-slate-300 shadow-md space-y-5">
         <div className="flex items-center justify-between border-b border-slate-200 pb-4">
           <div className="flex items-center space-x-3">
@@ -641,7 +655,6 @@ export default function ImportData({ onNavigate }) {
                 <th className="py-3.5 px-4 text-center"><i className="fa-solid fa-shield-halved mr-1.5 text-amber-300"></i>Status</th>
               </tr>
             </thead>
-            {/* Menggunakan ref tableBodyRef untuk transisi auto-animate paginasi tabel yang sangat smooth */}
             <tbody ref={tableBodyRef} className="divide-y divide-slate-200 bg-white">
               {currentLogs.length === 0 ? (
                 <tr>
@@ -673,7 +686,6 @@ export default function ImportData({ onNavigate }) {
           </table>
         </div>
 
-        {/* Komponen Navigasi Paginasi */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between pt-2">
             <span className="text-xs text-slate-500 font-medium">
