@@ -593,13 +593,26 @@ export default function BmiMonitoring() {
             <p className="text-xs text-slate-700 font-medium">Rekapitulasi data indeks massa tubuh dan status gizi seluruh CSR</p>
           </div>
         </div>
-        <button 
-          onClick={fetchAllData} 
-          className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold transition shadow-md flex items-center gap-2 cursor-pointer w-fit"
-        >
-          <i className="fa-solid fa-arrows-rotate"></i>
-          <span>Muat Ulang Data</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          {/* Tombol Direct ke Link Form BMI */}
+          <a 
+            href="https://lensa-qualityinsight.netlify.app/bmi-form" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold transition shadow-md flex items-center gap-2 cursor-pointer"
+          >
+            <i className="fa-solid fa-file-pen"></i>
+            <span>Isi Form BMI</span>
+          </a>
+
+          <button 
+            onClick={fetchAllData} 
+            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold transition shadow-md flex items-center gap-2 cursor-pointer w-fit"
+          >
+            <i className="fa-solid fa-arrows-rotate"></i>
+            <span>Muat Ulang Data</span>
+          </button>
+        </div>
       </div>
 
       {/* Bar Filter Paling Atas (Tepat di bawah header) */}
