@@ -40,6 +40,12 @@ export default function Coaching() {
   const [toastInfo, setToastInfo] = useState({ show: false, title: '', msg: '', mode: 'success' });
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', msg: '', onConfirm: null });
 
+  // Cek role pengguna aktif dari localStorage
+  const rawRole = (localStorage.getItem('sqUserRole') || 'Viewer').trim().toUpperCase();
+  const isViewer = rawRole === 'VIEWER';
+  const isTeamLeader = rawRole === 'TEAM LEADER' || rawRole === 'TL';
+  const isSQ = rawRole === 'SQ' || rawRole === 'SERVICE QUALITY';
+
   const [formData, setFormData] = useState({
     tanggal: new Date().toISOString().slice(0, 10),
     nik: '', nama: '', region: '', cluster: '', unitName: '', job: '',
@@ -233,9 +239,8 @@ export default function Coaching() {
 
   const handleInputSubmit = async (e) => {
     e.preventDefault();
-    const role = (localStorage.getItem('sqUserRole') || 'Viewer').trim().toUpperCase();
-    if (role === 'VIEWER') {
-      showToast("Akses Terbatas", "Viewer hanya dapat melihat data (Read-Only).", 'warning');
+    if (isViewer) {
+      showToast("Akses Ditolak", "Akun Viewer hanya dapat melihat data (Read-Only).", 'error');
       return;
     }
     if (!formData.nik || !formData.nama) {
@@ -283,6 +288,11 @@ export default function Coaching() {
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
+    if (isViewer) {
+      showToast("Akses Ditolak", "Akun Viewer tidak diizinkan mengubah data.", 'error');
+      return;
+    }
+
     try {
       let fileUrl = editData.linkEviden;
       if (editData.file) {
@@ -316,12 +326,13 @@ export default function Coaching() {
     }
   };
 
-  // Fungsi Hapus Langsung Tanpa Validasi .select() yang memicu error RLS/Array
   const handleDeleteRecord = (targetRow = null) => {
-    const role = (localStorage.getItem('sqUserRole') || '').trim().toUpperCase();
-    
-    if (role !== 'SQ' && role !== 'SERVICE QUALITY') {
-      showToast("Akses Ditolak", "Fitur hapus data hanya dapat diakses oleh akun dengan role Service Quality (SQ).", 'warning');
+    if (isViewer) {
+      showToast("Akses Ditolak", "Akun Viewer tidak diizinkan menghapus data.", 'error');
+      return;
+    }
+    if (isTeamLeader) {
+      showToast("Akses Ditolak", "Fitur hapus data hanya dapat diakses oleh akun dengan role Service Quality (SQ).", 'error');
       return;
     }
 
@@ -617,7 +628,13 @@ export default function Coaching() {
               <i className="fa-solid fa-file-excel"></i>
               <span>Unduh Excel</span>
             </button>
-            <button onClick={() => setShowInputModal(true)} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-2 shadow-md shadow-indigo-600/30 cursor-pointer">
+            <button onClick={() => {
+              if (isViewer) {
+                showToast("Akses Ditolak", "Akun Viewer hanya dapat melihat data (Read-Only).", "warning");
+                return;
+              }
+              setShowInputModal(true);
+            }} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-2 shadow-md shadow-indigo-600/30 cursor-pointer">
               <i className="fa-solid fa-plus"></i>
               <span>Input Coaching</span>
             </button>
@@ -685,7 +702,12 @@ export default function Coaching() {
                         <button onClick={() => { setSelectedRecord(row); setShowViewModal(true); }} title="Lihat Detail" className="w-8 h-8 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center text-xs transition border border-red-200 shadow-sm cursor-pointer">
                           <i className="fa-solid fa-eye"></i>
                         </button>
+                        
                         <button onClick={() => {
+                          if (isViewer) {
+                            showToast("Akses Ditolak", "Akun Viewer hanya dapat melihat data (Read-Only).", "warning");
+                            return;
+                          }
                           setEditData({
                             id: row.id, 
                             tanggal: row.tanggal || '', 
@@ -707,7 +729,18 @@ export default function Coaching() {
                         }} title="Update Data" className="px-3 py-1.5 bg-white hover:bg-amber-500 hover:text-white text-slate-700 rounded-xl text-xs font-bold transition-all duration-200 shadow-sm border border-slate-300 cursor-pointer flex items-center">
                           <i className="fa-solid fa-pen-to-square mr-1"></i> Update
                         </button>
-                        <button onClick={() => handleDeleteRecord(row)} title="Hapus Langsung" className="w-8 h-8 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center text-xs transition border border-rose-200 shadow-sm cursor-pointer">
+
+                        <button onClick={() => {
+                          if (isViewer) {
+                            showToast("Akses Ditolak", "Akun Viewer tidak diizinkan menghapus data.", "warning");
+                            return;
+                          }
+                          if (isTeamLeader) {
+                            showToast("Akses Ditolak", "Fitur hapus data hanya dapat diakses oleh akun dengan role Service Quality (SQ).", "warning");
+                            return;
+                          }
+                          handleDeleteRecord(row);
+                        }} title="Hapus Langsung" className="w-8 h-8 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center text-xs transition border border-rose-200 shadow-sm cursor-pointer">
                           <i className="fa-solid fa-trash-can"></i>
                         </button>
                       </div>

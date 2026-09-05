@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Activity, Database, Users, Award, UploadCloud } from 'lucide-react';
+import { LayoutDashboard, Activity, Database, Users, Award, Weight, UploadCloud, ExternalLink } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Sidebar({ userRole = "SERVICE QUALITY", onLogout }) {
@@ -9,16 +9,21 @@ export default function Sidebar({ userRole = "SERVICE QUALITY", onLogout }) {
     { path: '/', label: 'Overview', icon: LayoutDashboard },
     { path: '/readiness', label: 'Daily Readiness', icon: Activity },
     { path: '/tapping', label: 'Data Tapping CSR', icon: Database },
+    { path: '/tryout', label: 'Tryout T-Fronters', icon: Award },
+    { path: '/bmi-monitoring', label: 'BMI T-Fronters', icon: Weight },
     { path: '/coaching', label: 'Data Coaching', icon: Users },
-    { path: '/tryout', label: 'Tryout', icon: Award },
     { path: '/import', label: 'Import Data', icon: UploadCloud },
   ];
+
+  // Memastikan pengecekan role aman (mengabaikan perbedaan huruf besar/kecil seperti "service quality" atau "SQ")
+  const normalizedRole = String(userRole || '').trim().toUpperCase();
+  const isSQRole = normalizedRole.includes('SQ') || normalizedRole.includes('SERVICE QUALITY');
 
   return (
     <aside className="w-64 bg-gradient-to-b from-slate-900 via-indigo-950/60 to-rose-950/40 border-r border-slate-800/60 p-5 flex flex-col shrink-0 min-h-screen shadow-xl z-20">
       <div className="flex items-center gap-3 px-2 py-3 mb-6">
         <div className="w-10 h-10 rounded-2xl flex items-center justify-center overflow-hidden">
-          <img src="/icons.svg" alt="Lensa Logo" className="w-full h-full object-cover" />
+          <img src="/icons-lensa.svg" alt="Lensa Logo" className="w-full h-full object-cover" />
         </div>
         <div>
           <h1 className="font-bold text-sm tracking-wide text-slate-100">Lensa Quality Insight</h1>
@@ -64,6 +69,28 @@ export default function Sidebar({ userRole = "SERVICE QUALITY", onLogout }) {
             </Link>
           );
         })}
+
+        {/* Menu Tapple Audio QC - Hanya tampil khusus untuk role Service Quality / SQ */}
+        {isSQRole && (
+          <a
+            href="https://tapping-sample.netlify.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="relative flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-medium text-slate-400 hover:text-slate-200 transition-colors duration-200 group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-[18px] h-[18px] flex items-center justify-center shrink-0">
+                <img 
+                  src="/icons-tapple.svg" 
+                  alt="Tapple Icon" 
+                  className="w-full h-full object-contain opacity-75 group-hover:opacity-100 transition-opacity" 
+                />
+              </div>
+              <span>Tapple App</span>
+            </div>
+            <ExternalLink size={14} className="text-slate-500 group-hover:text-slate-300 transition-colors" />
+          </a>
+        )}
       </nav>
 
       <div className="mt-auto pt-4 space-y-2 border-t border-slate-800/60">

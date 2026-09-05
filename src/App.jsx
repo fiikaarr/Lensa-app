@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
@@ -9,6 +9,8 @@ import Coaching from './pages/Coaching';
 import Tryout from './pages/Tryout';
 import ImportData from './pages/ImportData';
 import Login from './pages/Login';
+import PublicBmiForm from './pages/PublicBmiForm';
+import BmiMonitoring from './pages/BmiMonitoring';
 
 function PageTitleUpdater() {
   const location = useLocation();
@@ -30,8 +32,15 @@ function PageTitleUpdater() {
       case '/tryout':
         document.title = 'Tryout | Lensa Insight';
         break;
+      case '/bmi-monitoring':
+        document.title = 'Monitoring BMI T-Fronters | Lensa Insight';
+        break;
       case '/import':
         document.title = 'Import Data | Lensa Insight';
+        break;
+      case '/bmi':
+      case '/bmi-form':
+        document.title = 'Formulir Monitoring BMI | Lensa Insight';
         break;
       default:
         document.title = 'Lensa Insight';
@@ -55,10 +64,11 @@ function MainLayout({ userRole, onLogout }) {
             <Route path="/" element={<Overview />} />
             <Route path="/readiness" element={<Readiness />} />
             <Route path="/tapping" element={<Tapping />} />
-            <Route path="/coaching" element={<Coaching />} />
             <Route path="/tryout" element={<Tryout />} />
+            <Route path="/bmi-monitoring" element={<BmiMonitoring />} />
+            <Route path="/coaching" element={<Coaching />} />
             <Route path="/import" element={<ImportData />} />
-            {/* Jika akses rute yang tidak dikenal, lempar kembali ke overview */}
+            {/* Jika akses rute yang tidak dikenal di dalam dashboard, lempar kembali ke overview */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
@@ -92,11 +102,15 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        {/* Jika belum login, arahkan semua rute langsung ke halaman Login */}
+        {/* Rute Publik (Bisa diakses tanpa login sama sekali) */}
+        <Route path="/bmi" element={<PublicBmiForm />} />
+        <Route path="/bmi-form" element={<PublicBmiForm />} />
+
+        {/* Jika belum login, arahkan semua rute selain /bmi ke halaman Login */}
         {!isLoggedIn ? (
           <Route path="*" element={<Login onLoginSuccess={handleLoginSuccess} />} />
         ) : (
-          /* Jika sudah login, tampilkan MainLayout yang mencakup seluruh rute menu */
+          /* Jika sudah login, tampilkan MainLayout yang mencakup seluruh rute menu internal */
           <Route path="/*" element={<MainLayout userRole={userRole} onLogout={handleLogout} />} />
         )}
       </Routes>

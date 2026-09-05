@@ -171,6 +171,16 @@ export default function ImportData({ onNavigate }) {
       "level": "level", "company_or_vendor": "company_or_vendor", "email": "email", 
       "nilai": "nilai", "bintang": "bintang", "keterangan": "keterangan", "soal_benar": "soal_benar", 
       "soal_salah": "soal_salah", "pengerjaan": "pengerjaan", "keterangan_1": "keterangan_1"
+    },
+    csr: {
+      "region": "region", "regional": "region",
+      "cluster": "cluster",
+      "unit_name": "unit_name", "unitname": "unit_name", "nama_grapari": "unit_name",
+      "nama_csr": "nama_csr", "nama": "nama_csr", "nama_lengkap": "nama_csr",
+      "nik_csr": "nik_csr", "nik": "nik_csr", "siad": "nik_csr",
+      "email": "email",
+      "job": "job", "posisi": "job",
+      "contact": "contact", "phone": "contact", "telepon": "contact"
     }
   };
 
@@ -250,6 +260,22 @@ export default function ImportData({ onNavigate }) {
         });
         if (result.nik_csr) result.nik_csr = String(result.nik_csr).trim();
         if (result.nama_csr) result.nama_csr = String(result.nama_csr).trim();
+        return result;
+      }
+    },
+    csr: {
+      label: "Database CSR (database_csr)",
+      tableName: "database_csr",
+      requiredColumns: ["nik_csr", "nama_csr"],
+      transform: (row) => {
+        const result = {};
+        Object.keys(row).forEach(header => {
+          const normKey = normalize(header.trim());
+          const targetKey = MAPPINGS.csr[normKey];
+          if (targetKey && row[header] !== undefined && row[header] !== "") {
+            result[targetKey] = String(row[header]).trim();
+          }
+        });
         return result;
       }
     }
@@ -371,24 +397,36 @@ export default function ImportData({ onNavigate }) {
       if (batchPayload.length > 0) {
         const uniqueMap = new Map();
         batchPayload.forEach(item => {
-          let uniqueKey = jenisData === 'tapping' 
-            ? `${item.nik_csr}_${item.tanggal_rekaman}` 
-            : `${item.nik_csr}_${item.tahun || ''}_${item.bulan || ''}_${item.minggu_ke || ''}`;
+          let uniqueKey = '';
+          if (jenisData === 'tapping') {
+            uniqueKey = `${item.nik_csr}_${item.tanggal_rekaman}`;
+          } else if (jenisData === 'tryout') {
+            uniqueKey = `${item.nik_csr}_${item.tahun || ''}_${item.bulan || ''}_${item.minggu_ke || ''}`;
+          } else if (jenisData === 'csr') {
+            uniqueKey = `${item.nik_csr || idx}`;
+          }
           uniqueMap.set(uniqueKey, item);
         });
         const finalPayload = Array.from(uniqueMap.values());
 
-        appendLog(`Mengirim ${finalPayload.length} baris data ke Supabase dengan mode UPSERT (${handler.tableName})...`);
+        appendLog(`Mengirim ${finalPayload.length} baris data ke Supabase (${handler.tableName})...`);
         
-        let conflictColumns = jenisData === 'tapping' ? 'nik_csr,tanggal_rekaman' : 'nik_csr,tahun,bulan,minggu_ke';
+        if (jenisData === 'csr') {
+          const { error } = await supabase
+            .from('database_csr')
+            .upsert(finalPayload, { onConflict: 'nik_csr' });
 
-        const { error } = await supabase
-          .from(handler.tableName)
-          .upsert(finalPayload, { onConflict: conflictColumns });
+          if (error) throw error;
+        } else {
+          let conflictColumns = jenisData === 'tapping' ? 'nik_csr,tanggal_rekaman' : 'nik_csr,tahun,bulan,minggu_ke';
+          const { error } = await supabase
+            .from(handler.tableName)
+            .upsert(finalPayload, { onConflict: conflictColumns });
 
-        if (error) throw error;
+          if (error) throw error;
+        }
 
-        // AUTO-COACHING UNTUK NILAI < 85 (MENGGUNAKAN KOLOM 'tanggal' SESUAI TABEL DATABASE_COACHING)
+        // AUTO-COACHING UNTUK NILAI < 85
         if (jenisData === 'tapping') {
           const lowPerformers = finalPayload.filter(item => {
             const nilai = Number(item.total_nilai) || 0;
@@ -401,7 +439,7 @@ export default function ImportData({ onNavigate }) {
             const coachingPayload = lowPerformers.map(item => ({
               nik_csr: item.nik_csr,
               nama_csr: item.nama_csr,
-              tanggal: item.tanggal_rekaman, // Kolom tabel database_coaching bernama 'tanggal'
+              tanggal: item.tanggal_rekaman,
               total_nilai: item.total_nilai,
               status_coaching: 'Pending',
               catatan: `Auto-generated dari Tapping tanggal ${item.tanggal_rekaman} karena nilai total (${item.total_nilai}%) di bawah 85%`
@@ -479,6 +517,7 @@ export default function ImportData({ onNavigate }) {
             >
               <option value="tapping">Data Tapping CSR (nilai_tapping)</option>
               <option value="tryout">Data Try Out CSR (nilai_to)</option>
+              <option value="csr">Database CSR (database_csr)</option>
             </select>
           </div>
 

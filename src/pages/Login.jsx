@@ -170,7 +170,7 @@ export default function Login({ onLoginSuccess }) {
         
         {/* Header Logo & Title */}
         <div className="flex flex-col items-center text-center space-y-2">
-          <img src="/favicon.svg" alt="Lensa Logo" className="w-14 h-14 object-contain mb-1" />
+          <img src="/icons-lensa.svg" alt="Lensa Logo" className="w-14 h-14 object-contain mb-1" />
           <h1 className="text-sm font-black tracking-wider text-white">Lensa - Quality Insight</h1>
           <p className="text-[11px] text-slate-400 font-medium">Analytics Hub & Performance Tracking System</p>
         </div>  
