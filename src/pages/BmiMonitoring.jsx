@@ -959,7 +959,7 @@ export default function BmiMonitoring() {
         <div className="flex items-center justify-between">
           <div>
             <h4 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <i className="fa-solid fa-triangle-exclamation text-rose-600"></i> CSR dengan Status BMI Tidak Ideal (3 Bulan Berturut-turut)
+              <i className="fa-solid fa-triangle-exclamation text-rose-600"></i> T-Fronters BMI Tidak Ideal (3 Bulan Berturut-turut)
             </h4>
             <p className="text-[11px] text-slate-500 mt-0.5">Daftar CSR yang tercatat mengalami kategori Overweight, Obesitas, atau Underweight selama 3 bulan berturut-turut.</p>
           </div>

@@ -7,6 +7,8 @@ import * as XLSX from 'xlsx';
 
 Chart.register(ChartDataLabels);
 
+const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzGef1rY95Af6g1iOtS5VONWusA-uCLZZmK8nGrgPHdVKscVPH15JH32RX7CQ4yV6wq2w/exec";
+
 export default function Readiness() {
   // State Global & Filter
   const [globalReadinessData, setGlobalReadinessData] = useState([]);
@@ -26,8 +28,10 @@ export default function Readiness() {
 
   const [filterStartDate, setFilterStartDate] = useState(firstDayOfMonth.toISOString().slice(0, 10));
   const [filterEndDate, setFilterEndDate] = useState(today.toISOString().slice(0, 10));
+  const [filterRegion, setFilterRegion] = useState('ALL');
   const [filterSource, setFilterSource] = useState('ALL');
   const [searchReadiness, setSearchReadiness] = useState('');
+  const [availableRegions, setAvailableRegions] = useState([]);
 
   // State KPI & Tabel
   const [cardFindings, setCardFindings] = useState(0);
@@ -54,10 +58,17 @@ export default function Readiness() {
   
   // State Input Manual
   const [inputDate, setInputDate] = useState(today.toISOString().slice(0, 10));
+  const [inputNik, setInputNik] = useState('');
+  const [inputNama, setInputNama] = useState('');
+  const [inputRegion, setInputRegion] = useState('');
+  const [inputCluster, setInputCluster] = useState('');
   const [inputUnit, setInputUnit] = useState('');
-  const [inputKategori, setInputKategori] = useState('-');
-  const [inputCatatan, setInputCatatan] = useState('');
-  const [inputEviden, setInputEviden] = useState('');
+  const [inputJob, setInputJob] = useState('');
+  const [inputTipe, setInputTipe] = useState('Coaching');
+  const [inputArea, setInputArea] = useState('Attitude');
+  const [inputRootCause, setInputRootCause] = useState('');
+  const [inputKomitmen, setInputKomitmen] = useState('');
+  const [inputFile, setInputFile] = useState(null);
 
   // State Edit
   const [editId, setEditId] = useState(null);
@@ -78,10 +89,12 @@ export default function Readiness() {
 
   // Chart Refs
   const trendChartRef = useRef(null);
+  const categoryChartRef = useRef(null);
   const regionalChartRef = useRef(null);
   const topUnitChartRef = useRef(null);
   
   const chartTrendInstance = useRef(null);
+  const chartCategoryInstance = useRef(null);
   const chartRegionalInstance = useRef(null);
   const chartTopUnitInstance = useRef(null);
 
@@ -91,12 +104,12 @@ export default function Readiness() {
 
   useEffect(() => {
     applyReadinessFilter();
-  }, [globalReadinessData, filterStartDate, filterEndDate, filterSource, searchReadiness, masterUnitList]);
+  }, [globalReadinessData, filterStartDate, filterEndDate, filterRegion, filterSource, searchReadiness, masterUnitList]);
 
   // Reset halaman ke 1 setiap kali filter atau pencarian berubah
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterStartDate, filterEndDate, filterSource, searchReadiness]);
+  }, [filterStartDate, filterEndDate, filterRegion, filterSource, searchReadiness]);
 
   // Helper untuk menutup modal secara smooth dengan animasi fade-out
   const closeModalWithAnimation = (closeSetter) => {
@@ -169,6 +182,9 @@ export default function Readiness() {
         setMasterUnitObjectsList(raisaRes.data);
         let extracted = raisaRes.data.map(d => d.raisa_name).filter(Boolean);
         setMasterUnitList(Array.from(new Set(extracted)).sort());
+
+        let regExtracted = raisaRes.data.map(d => d.region || d.area).filter(Boolean);
+        setAvailableRegions(Array.from(new Set(regExtracted)).sort());
       }
 
       let readinessRes = await supabase.from('database_readiness').select('*').order('tanggal', { ascending: false });
@@ -184,6 +200,17 @@ export default function Readiness() {
   };
 
   const applyReadinessFilter = () => {
+    let allowedUnitsSet = null;
+    if (filterRegion !== 'ALL') {
+      allowedUnitsSet = new Set();
+      masterUnitObjectsList.forEach(m => {
+        let reg = m.region || m.area || '';
+        if (reg === filterRegion && m.raisa_name) {
+          allowedUnitsSet.add(normalizeUnitName(m.raisa_name));
+        }
+      });
+    }
+
     let manualList = [];
     let analyticalList = [];
 
@@ -192,13 +219,18 @@ export default function Readiness() {
       let isManual = sumber.includes('manual');
       let matchSearch = searchReadiness === "" || (row.unit_name && row.unit_name.toLowerCase().includes(searchReadiness.toLowerCase()));
       let matchDate = !filterStartDate || !filterEndDate || (row.tanggal >= filterStartDate && row.tanggal <= filterEndDate);
+      
+      let matchRegion = true;
+      if (allowedUnitsSet) {
+        matchRegion = allowedUnitsSet.has(normalizeUnitName(row.unit_name));
+      }
 
-      if (isManual && matchSearch && matchDate) {
+      if (isManual && matchSearch && matchDate && matchRegion) {
         manualList.push(row);
       }
 
       let matchSource = filterSource === 'ALL' || (filterSource === 'Excel' && sumber.includes('excel')) || (filterSource === 'Manual' && sumber.includes('manual'));
-      if (matchSource && matchSearch && matchDate) {
+      if (matchSource && matchSearch && matchDate && matchRegion) {
         analyticalList.push(row);
       }
     }
@@ -206,10 +238,19 @@ export default function Readiness() {
     setManualTableData(manualList);
 
     let evalDate = filterEndDate || new Date().toISOString().slice(0, 10);
-    let raisaToday = globalReadinessData.filter(r => r.tanggal === evalDate && (r.sumber || "").toLowerCase().includes('excel'));
+    let raisaToday = globalReadinessData.filter(r => {
+      let dateMatch = r.tanggal === evalDate && (r.sumber || "").toLowerCase().includes('excel');
+      if (!dateMatch) return false;
+      if (allowedUnitsSet) {
+        return allowedUnitsSet.has(normalizeUnitName(r.unit_name));
+      }
+      return true;
+    });
     
+    let filteredMasterUnits = filterRegion === 'ALL' ? masterUnitList : masterUnitList.filter(m => allowedUnitsSet.has(normalizeUnitName(m)));
+
     let checkedCount = raisaToday.length;
-    let totalTarget = masterUnitList.length;
+    let totalTarget = filteredMasterUnits.length;
     let missing = Math.max(0, totalTarget - checkedCount);
     let compliance = totalTarget > 0 ? Math.min(100, Math.round((checkedCount / totalTarget) * 100)) : 0;
 
@@ -218,7 +259,7 @@ export default function Readiness() {
     setCardMissing(missing);
 
     let checkedNormSet = new Set(raisaToday.map(r => normalizeUnitName(r.unit_name)));
-    let unported = masterUnitList.filter(m => !checkedNormSet.has(normalizeUnitName(m)));
+    let unported = filteredMasterUnits.filter(m => !checkedNormSet.has(normalizeUnitName(m)));
     setUnportedUnitsList(unported);
 
     let manualFindings = analyticalList.filter(r => (r.status || "").toLowerCase().includes('temuan') && (r.sumber || "").toLowerCase().includes('manual'));
@@ -237,6 +278,7 @@ export default function Readiness() {
     setCardTopIssue(sortedCats.length > 0 ? sortedCats[0][0] : '-');
 
     renderTrendChart(analyticalList);
+    renderCategoryChart(manualFindings);
     renderRegionalChart(masterUnitObjectsList, raisaToday);
     renderTopUnitChart(unitMap);
   };
@@ -288,6 +330,57 @@ export default function Readiness() {
         scales: {
           x: { grid: { display: false }, ticks: { font: { weight: 'bold', size: 9 }, color: '#475569', maxRotation: 45 } },
           y: { beginAtZero: true, grid: { color: 'rgba(99, 102, 241, 0.1)', borderDash: [5, 5] }, ticks: { display: false }, border: { display: false } }
+        }
+      },
+      plugins: [ChartDataLabels]
+    });
+  };
+
+  const renderCategoryChart = (manualFindings) => {
+    if (!categoryChartRef.current) return;
+    if (chartCategoryInstance.current) chartCategoryInstance.current.destroy();
+
+    let catCounts = { Grooming: 0, Kehadiran: 0, Fasilitas: 0 };
+    for (let f of manualFindings) {
+      let cat = (f.kategori || '').toLowerCase();
+      if (cat.includes('grooming')) catCounts.Grooming++;
+      else if (cat.includes('kehadiran')) catCounts.Kehadiran++;
+      else if (cat.includes('fasilitas')) catCounts.Fasilitas++;
+    }
+
+    let labels = ['Grooming', 'Kehadiran', 'Fasilitas Layanan'];
+    let data = [catCounts.Grooming, catCounts.Kehadiran, catCounts.Fasilitas];
+    let colors = ['#F59E0B', '#3B82F6', '#10B981'];
+
+    chartCategoryInstance.current = new Chart(categoryChartRef.current, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ data, backgroundColor: colors, borderRadius: 8, barPercentage: 0.55 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 25 } },
+        plugins: {
+          legend: { display: false },
+          datalabels: {
+            display: true,
+            anchor: 'end',
+            align: 'top',
+            offset: 4,
+            font: { weight: 'bold', size: 11 },
+            color: '#334155'
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 9, weight: 'bold' }, color: '#475569' } },
+          y: { 
+            beginAtZero: true, 
+            grid: { color: 'rgba(99, 102, 241, 0.1)', borderDash: [5, 5] }, 
+            ticks: { display: false }, 
+            border: { display: false } 
+          }
         }
       },
       plugins: [ChartDataLabels]
@@ -433,20 +526,77 @@ export default function Readiness() {
     showReadinessToast("Sukses", "File Excel database histori temuan berhasil di-download.", "success");
   };
 
+  const handleAutoFillInput = async (nikVal) => {
+    const cleanNik = nikVal.trim();
+    setInputNik(cleanNik);
+    if (!cleanNik) return;
+    try {
+      const { data, error } = await supabase
+        .from('database_csr')
+        .select('*')
+        .or(`nik.eq.${cleanNik},nik_csr.eq.${cleanNik}`)
+        .limit(1);
+      
+      if (!error && data && data.length > 0) {
+        const row = data[0];
+        setInputNama(row.nama || row.nama_csr || '');
+        setInputRegion(row.region || '');
+        setInputCluster(row.cluster || '');
+        setInputUnit(row.unitName || row.unit_name || '');
+        setInputJob(row.job || '');
+      }
+    } catch (err) {
+      console.error("Gagal auto-fill CSR:", err);
+    }
+  };
+
+  const uploadFileToDrive = async (fileObj) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(fileObj);
+      reader.onload = async () => {
+        const base64 = reader.result.split(',')[1];
+        try {
+          const res = await fetch(GAS_WEB_APP_URL, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ fileName: fileObj.name, mimeType: fileObj.type, base64 })
+          });
+          const result = await res.json();
+          if (result.status === "success") resolve(result.url);
+          else reject(new Error(result.message || "Gagal upload"));
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = err => reject(err);
+    });
+  };
+
   const submitManualData = async () => {
-    if (!inputUnit.trim()) {
-      showReadinessToast("Perhatian", "Pilih atau ketik unit terlebih dahulu!", "warning");
+    if (!inputNik.trim() || !inputNama.trim()) {
+      showReadinessToast("Perhatian", "Harap isi NIK dan Nama CSR terlebih dahulu!", "warning");
       return;
     }
     try {
+      let fileUrl = '';
+      if (inputFile) {
+        fileUrl = await uploadFileToDrive(inputFile);
+      }
+
       let { error } = await supabase.from('database_readiness').insert([{
         tanggal: inputDate,
+        nik_csr: inputNik.trim(),
+        nama_csr: inputNama.trim(),
+        region: inputRegion,
+        cluster: inputCluster,
         unit_name: inputUnit.trim(),
+        job: inputJob,
         sumber: 'Manual (SQ)',
         status: 'Temuan',
         kategori: inputKategori,
         catatan: inputCatatan,
-        link_eviden: inputEviden
+        link_eviden: fileUrl || inputEviden
       }]);
       if (error) throw error;
 
@@ -615,7 +765,7 @@ export default function Readiness() {
         </div>
 
         {/* Filter Control Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-4 border-t border-slate-300 relative z-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 pt-4 border-t border-slate-300 relative z-10">
           <div>
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Dari Tanggal</label>
             <input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-2xl text-xs font-semibold text-slate-800 shadow-inner focus:outline-none focus:border-indigo-600" />
@@ -623,6 +773,15 @@ export default function Readiness() {
           <div>
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Sampai Tanggal</label>
             <input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-2xl text-xs font-semibold text-slate-800 shadow-inner focus:outline-none focus:border-indigo-600" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Filter Regional</label>
+            <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-2xl text-xs font-semibold text-slate-800 shadow-inner focus:outline-none focus:border-indigo-600">
+              <option value="ALL">Semua Regional</option>
+              {availableRegions.map((reg, idx) => (
+                <option key={idx} value={reg}>{reg}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Sumber Data</label>
@@ -695,10 +854,20 @@ export default function Readiness() {
           <div className="relative h-64"><canvas ref={trendChartRef}></canvas></div>
         </div>
 
+        {/* Chart Kategori Temuan (Grooming, Kehadiran, Fasilitas Layanan) dengan angka tepat di atas batang */}
+        <div className="bg-gradient-to-b from-amber-50/90 via-amber-100/40 to-slate-100 p-6 rounded-3xl border border-amber-200 shadow-md flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-sm font-extrabold text-amber-950 flex items-center">
+              <i className="fa-solid fa-chart-bar text-amber-600 mr-2"></i> Perbandingan Kategori Temuan
+            </h4>
+          </div>
+          <div className="relative h-64"><canvas ref={categoryChartRef}></canvas></div>
+        </div>
+
         <div className="bg-gradient-to-b from-rose-50/90 via-rose-100/40 to-slate-100 p-5 rounded-3xl border border-rose-200 shadow-md flex flex-col h-[332px]">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-[11px] font-black text-rose-950 uppercase tracking-wider flex items-center">
-              <i className="fa-solid fa-circle-exclamation mr-2 text-rose-600 animate-pulse"></i> Unit Belum Ceklis (Tanggal Akhir)
+              <i className="fa-solid fa-circle-exclamation mr-2 text-rose-600 animate-pulse"></i> Unit Belum Ceklis Daily
             </h4>
             <button onClick={downloadMissingUnitsExcel} className="w-7 h-7 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center text-xs shadow-sm transition cursor-pointer" title="Download Excel Unit Belum Ceklis">
               <i className="fa-solid fa-file-excel"></i>
@@ -717,12 +886,12 @@ export default function Readiness() {
 
         <div className="bg-gradient-to-b from-sky-50/90 via-sky-100/40 to-slate-100 p-6 rounded-3xl border border-sky-200 shadow-md flex flex-col justify-between">
           <h4 className="text-sm font-extrabold text-sky-950 mb-4 flex items-center">
-            <i className="fa-solid fa-chart-column text-sky-600 mr-2"></i> Kepatuhan Checklist per Regional
+            <i className="fa-solid fa-chart-column text-sky-600 mr-2"></i> Kepatuhan Checklist per Regional Daily
           </h4>
           <div className="relative h-64"><canvas ref={regionalChartRef}></canvas></div>
         </div>
 
-        <div className="bg-gradient-to-b from-amber-50/90 via-amber-100/40 to-slate-100 p-5 rounded-3xl border border-amber-200 shadow-md flex flex-col h-[332px]">
+        <div className="bg-gradient-to-b from-amber-50/90 via-amber-100/40 to-slate-100 p-5 rounded-3xl border border-amber-200 shadow-md flex flex-col h-[332px] lg:col-span-2">
           <h4 className="text-[11px] font-black text-amber-950 uppercase tracking-wider mb-3 flex items-center">
             <i className="fa-solid fa-ranking-star text-amber-600 mr-2"></i> Unit Temuan Terbanyak
           </h4>
@@ -753,18 +922,18 @@ export default function Readiness() {
           </div>
         </div>
 
-        {/* Tabel dengan Header Gradasi Gelap ke Terang (Warna Dasar Hijau) & Penataan Proporsional Kolom */}
+        {/* Tabel dengan Kolom Catatan Khusus Paling Lebar dan Kolom Lainnya Lebar Sama Rata */}
         <div className="overflow-x-auto rounded-2xl border border-slate-300 shadow-sm bg-white">
           <table className="w-full text-left border-collapse table-fixed">
             <thead>
               <tr className="bg-gradient-to-r from-emerald-950 via-emerald-900 to-emerald-600 text-[10px] font-black uppercase tracking-wider text-white shadow-md">
-                <th className="py-4 px-4 w-[11%]">Tanggal</th>
-                <th className="py-4 px-4 w-[18%]">Unit Name</th>
-                <th className="py-4 px-4 w-[11%] text-center">Status</th>
-                <th className="py-4 px-4 w-[15%]">Kategori Temuan</th>
-                <th className="py-4 px-4 w-[24%]">Catatan Khusus</th>
-                <th className="py-4 px-4 w-[12%] text-center">Link Temuan</th>
-                <th className="py-4 px-4 w-[9%] text-center">Aksi</th>
+                <th className="py-4 px-3 w-[10%]">Tanggal</th>
+                <th className="py-4 px-3 w-[10%]">Unit Name</th>
+                <th className="py-4 px-3 w-[10%] text-center">Status</th>
+                <th className="py-4 px-3 w-[10%]">Kategori Temuan</th>
+                <th className="py-4 px-4 w-[40%]">Catatan Khusus</th>
+                <th className="py-4 px-3 w-[10%] text-center">Link Temuan</th>
+                <th className="py-4 px-3 w-[10%] text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
@@ -777,45 +946,46 @@ export default function Readiness() {
                   const isLongText = catatanText.length > 50;
 
                   return (
-                    <tr key={record.id} className="hover:bg-slate-50 transition border-b border-slate-100 align-top">
-                      <td className="py-3 px-4 text-slate-600 font-semibold">{record.tanggal || '-'}</td>
-                      <td className="py-3 px-4 text-slate-900 font-bold break-words">{record.unit_name || '-'}</td>
-                      <td className="py-3 px-4 text-center">
+                    <tr key={record.id} className="hover:bg-slate-50 transition border-b border-slate-100 h-[64px] align-middle">
+                      <td className="py-2 px-3 text-slate-600 font-semibold truncate">
+                        {record.tanggal || '-'}
+                      </td>
+                      <td className="py-2 px-3 text-slate-900 font-bold truncate">
+                        {record.unit_name || '-'}
+                      </td>
+                      <td className="py-2 px-3 text-center truncate">
                         <span className="px-2.5 py-1 text-[10px] font-black tracking-wider uppercase border rounded-xl shadow-sm bg-amber-100 text-amber-800 border-amber-200 inline-block">
                           {record.status || 'Temuan'}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-700 font-semibold break-words">{record.kategori || '-'}</td>
+                      <td className="py-2 px-3 text-slate-700 font-semibold truncate">
+                        {record.kategori || '-'}
+                      </td>
                       
-                      {/* Kolom Catatan Khusus dengan Klik untuk Expand */}
-                      <td className="py-3 px-4 text-slate-600 break-words">
-                        <div 
-                          onClick={() => {
-                            if (isLongText) {
-                              setExpandedNotes(prev => ({ ...prev, [record.id]: !prev[record.id] }));
-                            }
-                          }}
-                          className={`transition-all duration-200 ${isLongText ? 'cursor-pointer hover:text-indigo-600 select-none' : ''}`}
-                          title={isLongText ? (isExpanded ? "Klik untuk sembunyikan" : "Klik untuk membaca selengkapnya") : ""}
-                        >
-                          <p className={`leading-relaxed ${!isExpanded && isLongText ? 'line-clamp-2' : ''}`}>
+                      {/* Kolom Catatan Khusus Paling Lebar dengan Tinggi Fixed & Tombol Selengkapnya */}
+                      <td className="py-2 px-4 text-slate-600">
+                        <div className="flex flex-col justify-center h-full">
+                          <p className={`leading-snug ${!isExpanded ? 'truncate' : 'whitespace-pre-wrap'}`}>
                             {catatanText}
                           </p>
                           {isLongText && (
-                            <span className="text-[10px] font-bold text-indigo-500 mt-1 inline-block">
+                            <button 
+                              onClick={() => setExpandedNotes(prev => ({ ...prev, [record.id]: !prev[record.id] }))}
+                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 text-left mt-0.5 cursor-pointer focus:outline-none"
+                            >
                               {isExpanded ? '▲ Sembunyikan' : '▼ Selengkapnya'}
-                            </span>
+                            </button>
                           )}
                         </div>
                       </td>
 
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-2 px-3 text-center truncate">
                         {record.link_eviden ? (
                           <a 
                             href={record.link_eviden} 
                             target="_blank" 
                             rel="noopener noreferrer" 
-                            className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold border border-indigo-200 transition"
+                            className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold border border-indigo-200 transition truncate"
                           >
                             <i className="fa-solid fa-link text-[9px]"></i>
                             <span>Buka Link</span>
@@ -824,7 +994,7 @@ export default function Readiness() {
                           <span className="text-slate-400 italic text-[10px]">Tidak ada link</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-2 px-3 text-center truncate">
                         <div className="flex items-center justify-center space-x-1.5">
                           <button onClick={() => openEditModal(record.id)} className="w-7 h-7 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center text-xs font-bold border border-amber-200 transition cursor-pointer" title="Edit Data"><i className="fa-solid fa-pen-to-square"></i></button>
                           <button onClick={() => deleteReadiness(record.id)} className="w-7 h-7 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg flex items-center justify-center text-xs font-bold border border-rose-200 transition cursor-pointer" title="Hapus Data"><i className="fa-solid fa-trash"></i></button>
@@ -874,58 +1044,88 @@ export default function Readiness() {
 
       {/* ================= MODALS (Fade In & Fade Out ala iOS) ================= */}
       
-      {/* 1. Modal Input Manual */}
+      {/* 1. Modal Input Manual dengan Fitur Lengkap CSR Form */}
       {showManualModal && ReactDOM.createPortal(
         <div className={`fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 overflow-y-auto transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'animate-[fadeIn_0.2s_ease-out_forwards]'}`} onClick={() => closeModalWithAnimation(setShowManualModal)}>
-          <div className={`w-full max-w-lg bg-white rounded-[2rem] shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto transition-all duration-200 ${isClosing ? 'scale-95 opacity-0' : 'animate-[scaleUp_0.2s_ease-out_forwards]'}`} onClick={e => e.stopPropagation()}>
+          <div className={`w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto transition-all duration-200 ${isClosing ? 'scale-95 opacity-0' : 'animate-[scaleUp_0.2s_ease-out_forwards]'}`} onClick={e => e.stopPropagation()}>
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-[2rem]">
               <div>
-                <h3 className="text-base font-black tracking-tight text-slate-800">Input Temuan (By Exception)</h3>
-                <p className="text-[10px] text-slate-500 font-medium mt-0.5">Catat temuan pelanggaran layanan/grooming</p>
+                <h3 className="text-base font-black tracking-tight text-slate-800">Form Input Sesi Coaching & Counseling / Temuan</h3>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">Catat temuan pelanggaran layanan/grooming & pembinaan CSR</p>
               </div>
               <button onClick={() => closeModalWithAnimation(setShowManualModal)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-600 hover:bg-rose-500 hover:text-white transition-colors cursor-pointer"><i className="fa-solid fa-xmark"></i></button>
             </div>
-            <div className="p-6 overflow-y-auto space-y-4">
+            <div className="p-6 overflow-y-auto space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Tanggal</label>
-                  <input type="date" value={inputDate} onChange={e => setInputDate(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:border-indigo-500 outline-none" />
+                  <label className="block font-bold text-slate-700 mb-1">Tanggal</label>
+                  <input type="date" value={inputDate} onChange={e => setInputDate(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition" required />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Unit GraPARI</label>
-                  <input type="text" value={inputUnit} onChange={e => setInputUnit(e.target.value)} list="listMasterInput" placeholder="Ketik nama unit..." className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:border-indigo-500 outline-none" />
-                  <datalist id="listMasterInput">
-                    {masterUnitList.map((u, i) => <option key={i} value={u} />)}
-                  </datalist>
+                  <label className="block font-bold text-slate-700 mb-1">NIK CSR (Auto-Fill)</label>
+                  <input type="text" value={inputNik} onChange={e => handleAutoFillInput(e.target.value)} placeholder="Masukkan NIK..." className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition" required />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Nama CSR</label>
+                  <input type="text" value={inputNama} readOnly className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-semibold cursor-not-allowed" />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Region</label>
+                  <input type="text" value={inputRegion} readOnly className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-semibold cursor-not-allowed" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Cluster</label>
+                  <input type="text" value={inputCluster} readOnly className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-medium cursor-not-allowed" />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Unit Name</label>
+                  <input type="text" value={inputUnit} readOnly className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-medium cursor-not-allowed" />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Job Role</label>
+                  <input type="text" value={inputJob} readOnly className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-medium cursor-not-allowed" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Tipe Pembinaan</label>
+                  <select value={inputTipe} onChange={e => setInputTipe(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition cursor-pointer">
+                    <option value="Coaching">Coaching</option>
+                    <option value="Counseling">Counseling</option>
+                    <option value="Surat Peringatan">Surat Peringatan</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Jenis Temuan / Area</label>
+                  <select value={inputArea} onChange={e => setInputArea(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition cursor-pointer">
+                    <option value="Attitude">Attitude</option>
+                    <option value="Skill">Skill</option>
+                    <option value="Knowledge">Knowledge</option>
+                    <option value="Tapping UnderTarget (<85%)">Tapping UnderTarget (&lt;85%)</option>
+                    <option value="Pelanggaran SOP / Fraud">Pelanggaran SOP / Fraud</option>
+                  </select>
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Status Kesiapan</label>
-                <div className="w-full px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-700 flex items-center space-x-2">
-                  <i className="fa-solid fa-triangle-exclamation"></i>
-                  <span>Ada Temuan (Grooming / Fasilitas)</span>
-                </div>
+                <label className="block font-bold text-slate-700 mb-1">Akar Masalah (Root Cause)</label>
+                <textarea rows="2" value={inputRootCause} onChange={e => setInputRootCause(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition" placeholder="Tuliskan akar masalah..."></textarea>
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Kategori Temuan</label>
-                <select value={inputKategori} onChange={e => setInputKategori(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:border-indigo-500 outline-none">
-                  <option value="-">Pilih Kategori...</option>
-                  <option value="Grooming">Grooming (Seragam/Rambut/Make Up)</option>
-                  <option value="Fasilitas">Fasilitas Layanan (Perangkat/Kebersihan)</option>
-                  <option value="Kehadiran">Kehadiran (Terlambat/Bolos)</option>
-                </select>
+                <label className="block font-bold text-slate-700 mb-1">Komitmen / Action Plan</label>
+                <textarea rows="2" value={inputKomitmen} onChange={e => setInputKomitmen(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition" placeholder="Tuliskan komitmen perbaikan..."></textarea>
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Catatan Detail</label>
-                <textarea rows="3" value={inputCatatan} onChange={e => setInputCatatan(e.target.value)} placeholder="Misal: Jas tidak dikancing rapi..." className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:border-indigo-500 outline-none resize-none"></textarea>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Link Eviden</label>
-                <input type="url" value={inputEviden} onChange={e => setInputEviden(e.target.value)} placeholder="https://..." className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:border-indigo-500 outline-none" />
+                <label className="block font-bold text-slate-700 mb-1">Lampiran Eviden (File)</label>
+                <input type="file" onChange={e => setInputFile(e.target.files[0])} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl file:mr-4 file:py-1.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 transition cursor-pointer" />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-slate-100 flex justify-end bg-slate-50 rounded-b-[2rem]">
-              <button onClick={submitManualData} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer">Simpan Temuan</button>
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end space-x-2 bg-slate-50 rounded-b-[2rem]">
+              <button type="button" onClick={() => closeModalWithAnimation(setShowManualModal)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold cursor-pointer transition text-xs">Batal</button>
+              <button onClick={submitManualData} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer">Simpan Data</button>
             </div>
           </div>
         </div>,
@@ -934,7 +1134,7 @@ export default function Readiness() {
 
       {/* 2. Modal View Detail */}
       {showViewModal && selectedRecord && ReactDOM.createPortal(
-        <div className={`fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 overflow-y-auto transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'animate-[fadeIn_0.2s_ease-out_forwards]'}`} onClick={() => closeModalWithAnimation(setShowViewModal)}>
+        <div className={`fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 overflow-y-auto transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'animate-[fadeIn_0.2s_ease-out_forwards]'}`} onClick={() => closeModalWithAnimation(setShowViewModal)}>
           <div className={`w-full max-w-lg bg-white rounded-[2rem] shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto transition-all duration-200 ${isClosing ? 'scale-95 opacity-0' : 'animate-[scaleUp_0.2s_ease-out_forwards]'}`} onClick={e => e.stopPropagation()}>
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-[2rem]">
               <h3 className="text-base font-black tracking-tight text-slate-800">Detail Temuan (SQ)</h3>
