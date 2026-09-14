@@ -93,32 +93,53 @@ export default function Coaching() {
     setTimeout(() => setToastInfo(prev => ({ ...prev, show: false })), 4000);
   };
 
+  // HELPER FUNCTION: Menarik data Supabase secara otomatis berapapun jumlahnya tanpa batas limit hardcode
+  const fetchAllSupabase = async (tableName, queryModifier = null) => {
+    let allData = [];
+    let start = 0;
+    const limit = 1000;
+    while (true) {
+      let query = supabase.from(tableName).select('*').range(start, start + limit - 1);
+      if (queryModifier) {
+        query = queryModifier(query);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      allData.push(...data);
+      if (data.length < limit) break;
+      start += limit;
+    }
+    return allData;
+  };
+
   const loadCoachData = async () => {
     try {
-      const { data: csrRes, error: csrErr } = await supabase.from('database_csr').select('*');
-      if (csrErr) throw csrErr;
-      const csrData = csrRes || [];
+      const csrData = await fetchAllSupabase('database_csr');
       setCsrDatabase(csrData);
 
       const allRegions = ['ALL', ...new Set(csrData.map(i => i.region).filter(Boolean))].sort();
       setRegionsList(allRegions.filter(r => r !== 'ALL'));
 
-      let { data: coachRes, error: coachErr } = await supabase.from('database_coaching').select('*').order('tanggal', { ascending: false });
-      if (coachErr) throw coachErr;
-      let coachData = coachRes || [];
+      let coachData = await fetchAllSupabase('database_coaching', (q) => q.order('tanggal', { ascending: false }));
+
+      const fourteenDaysAgo = new Date();
+      fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+      const dateStrLimit = fourteenDaysAgo.toISOString().split('T')[0];
 
       const { data: tapRes, error: tapErr } = await supabase.from('nilai_tapping')
         .select('*')
-        .gte('tanggal_assessor', '2026-09-01')
+        .gte('tanggal_assessor', dateStrLimit)
         .lt('total_nilai', 85);
 
       if (!tapErr && tapRes && tapRes.length > 0) {
         const missingCoaching = [];
         tapRes.forEach(tap => {
           const tglTap = typeof tap.tanggal_assessor === 'string' ? tap.tanggal_assessor.substring(0, 10) : '';
-          const exist = coachData.find(c => (c.nik_csr === tap.nik_csr || c.nik === tap.nik_csr) && c.tanggal === tglTap);
           
-          if (!exist && tglTap && tap.nik_csr) {
+          const existInDb = coachData.find(c => (c.nik_csr === tap.nik_csr || c.nik === tap.nik_csr) && c.tanggal === tglTap);
+          const existInQueue = missingCoaching.find(c => c.nik_csr === tap.nik_csr && c.tanggal === tglTap);
+          
+          if (!existInDb && !existInQueue && tglTap && tap.nik_csr) {
             missingCoaching.push({
               tanggal: tglTap,
               nik_csr: tap.nik_csr,
@@ -138,8 +159,7 @@ export default function Coaching() {
         if (missingCoaching.length > 0) {
           const { error: insertErr } = await supabase.from('database_coaching').insert(missingCoaching);
           if (!insertErr) {
-            const { data: reloadedCoach } = await supabase.from('database_coaching').select('*').order('tanggal', { ascending: false });
-            coachData = reloadedCoach || [];
+            coachData = await fetchAllSupabase('database_coaching', (q) => q.order('tanggal', { ascending: false }));
           }
         }
       }

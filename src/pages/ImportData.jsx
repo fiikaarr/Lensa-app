@@ -399,7 +399,7 @@ export default function ImportData({ onNavigate }) {
         batchPayload.forEach(item => {
           let uniqueKey = '';
           if (jenisData === 'tapping') {
-            uniqueKey = `${item.nik_csr}_${item.tanggal_rekaman}`;
+            uniqueKey = `${item.nik_csr}_${item.tanggal_assessor}`;
           } else if (jenisData === 'tryout') {
             uniqueKey = `${item.nik_csr}_${item.tahun || ''}_${item.bulan || ''}_${item.minggu_ke || ''}`;
           } else if (jenisData === 'csr') {
@@ -418,7 +418,7 @@ export default function ImportData({ onNavigate }) {
 
           if (error) throw error;
         } else {
-          let conflictColumns = jenisData === 'tapping' ? 'nik_csr,tanggal_rekaman' : 'nik_csr,tahun,bulan,minggu_ke';
+          let conflictColumns = jenisData === 'tapping' ? 'nik_csr,tanggal_assessor' : 'nik_csr,tahun,bulan,minggu_ke';
           const { error } = await supabase
             .from(handler.tableName)
             .upsert(finalPayload, { onConflict: conflictColumns });
@@ -426,7 +426,7 @@ export default function ImportData({ onNavigate }) {
           if (error) throw error;
         }
 
-        // AUTO-COACHING UNTUK NILAI < 85
+        // AUTO-COACHING UNTUK NILAI < 85 & MENGAMBIL CLUSTER DARI database_csr
         if (jenisData === 'tapping') {
           const lowPerformers = finalPayload.filter(item => {
             const nilai = Number(item.total_nilai) || 0;
@@ -434,16 +434,43 @@ export default function ImportData({ onNavigate }) {
           });
 
           if (lowPerformers.length > 0) {
-            appendLog(`Mendeteksi ${lowPerformers.length} agen dengan nilai < 85%. Menyinkronkan ke database_coaching...`);
+            appendLog(`Mendeteksi ${lowPerformers.length} agen dengan nilai < 85%. Mengambil data cluster dari database_csr...`);
             
-            const coachingPayload = lowPerformers.map(item => ({
-              nik_csr: item.nik_csr,
-              nama_csr: item.nama_csr,
-              tanggal: item.tanggal_rekaman,
-              total_nilai: item.total_nilai,
-              status_coaching: 'Pending',
-              catatan: `Auto-generated dari Tapping tanggal ${item.tanggal_rekaman} karena nilai total (${item.total_nilai}%) di bawah 85%`
-            }));
+            // Ambil data database_csr
+            const { data: csrDatabase, error: csrError } = await supabase
+              .from('database_csr')
+              .select('nik_csr, cluster, region, unit_name');
+
+            const csrMap = new Map();
+            if (!csrError && csrDatabase) {
+              csrDatabase.forEach(csr => {
+                const cleanDbNik = String(csr.nik_csr || '').trim();
+                if (cleanDbNik) {
+                  csrMap.set(cleanDbNik, csr);
+                }
+              });
+            }
+
+            const coachingPayload = lowPerformers.map(item => {
+              const cleanItemNik = String(item.nik_csr || '').trim();
+              const csrInfo = csrMap.get(cleanItemNik) || {};
+              
+              return {
+                nik_csr: item.nik_csr,
+                nama_csr: item.nama_csr,
+                tanggal: item.tanggal_assessor,
+                total_nilai: item.total_nilai,
+                region: item.regional || csrInfo.region || '-',
+                cluster: csrInfo.cluster || '-', // Diambil dari database_csr berdasarkan nik_csr
+                unit_name: item.unit_name || csrInfo.unit_name || '-',
+                tipe: 'Coaching',
+                jenis_temuan: 'Tapping UnderTarget (<85%)',
+                status: 'Open',
+                root_cause: '',
+                komitmen: '',
+                link_eviden: ''
+              };
+            });
 
             const { error: coachingError } = await supabase
               .from('database_coaching')
@@ -452,7 +479,7 @@ export default function ImportData({ onNavigate }) {
             if (coachingError) {
               appendLog(`Warning/Gagal auto-input coaching: ${coachingError.message}`, 'warn');
             } else {
-              appendLog(`Berhasil menyinkronkan ${lowPerformers.length} data ke database_coaching secara bersih!`, 'success');
+              appendLog(`Berhasil menyinkronkan ${lowPerformers.length} data ke database_coaching dengan Cluster dari database_csr!`, 'success');
             }
           }
         }

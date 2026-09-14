@@ -74,13 +74,32 @@ export default function Tapping() {
 
   const loadTappingData = async () => {
     try {
-      const { data: tapData, error: tapErr } = await supabase.from('nilai_tapping').select('*');
+      // 1. Ambil list regional untuk dropdown
+      const { data: regData } = await supabase.from('nilai_tapping').select('regional');
+      if (regData) {
+        const allRegionals = [...new Set(regData.map(d => d.regional).filter(Boolean))].sort();
+        setRegionalsList(allRegionals);
+      }
+
+      // 2. Buat query utama ke Supabase dengan filter tanggal dinamis (500 data pertama jika tanggal kosong)
+      let query = supabase.from('nilai_tapping').select('*');
+
+      if (startDate && endDate) {
+        query = query.gte('tanggal_assessor', startDate).lte('tanggal_assessor', endDate);
+      } else if (startDate) {
+        query = query.gte('tanggal_assessor', startDate);
+      } else if (endDate) {
+        query = query.lte('tanggal_assessor', endDate);
+      } else {
+        query = query.limit(500);
+      }
+
+      let { data: tapData, error: tapErr } = await query;
       if (tapErr) throw tapErr;
 
       const rawData = tapData || [];
-      const allRegionals = [...new Set(rawData.map(d => d.regional).filter(Boolean))].sort();
-      setRegionalsList(allRegionals);
 
+      // 3. Filter lanjutan untuk Regional dan Unit di sisi frontend
       let filteredData = rawData.filter(d => {
         let match = true;
         let rawTgl = d.tanggal_assessor || '';
