@@ -56,19 +56,12 @@ export default function Readiness() {
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [confirmConfig, setConfirmConfig] = useState({ title: '', msg: '', onConfirm: null });
   
-  // State Input Manual
+  // State Input Manual (Tanpa upload file, menggunakan link eviden saja)
   const [inputDate, setInputDate] = useState(today.toISOString().slice(0, 10));
-  const [inputNik, setInputNik] = useState('');
-  const [inputNama, setInputNama] = useState('');
-  const [inputRegion, setInputRegion] = useState('');
-  const [inputCluster, setInputCluster] = useState('');
   const [inputUnit, setInputUnit] = useState('');
-  const [inputJob, setInputJob] = useState('');
-  const [inputTipe, setInputTipe] = useState('Coaching');
-  const [inputArea, setInputArea] = useState('Attitude');
-  const [inputRootCause, setInputRootCause] = useState('');
-  const [inputKomitmen, setInputKomitmen] = useState('');
-  const [inputFile, setInputFile] = useState(null);
+  const [inputKategori, setInputKategori] = useState('Grooming');
+  const [inputCatatan, setInputCatatan] = useState('');
+  const [inputEviden, setInputEviden] = useState('');
 
   // State Edit
   const [editId, setEditId] = useState(null);
@@ -526,77 +519,20 @@ export default function Readiness() {
     showReadinessToast("Sukses", "File Excel database histori temuan berhasil di-download.", "success");
   };
 
-  const handleAutoFillInput = async (nikVal) => {
-    const cleanNik = nikVal.trim();
-    setInputNik(cleanNik);
-    if (!cleanNik) return;
-    try {
-      const { data, error } = await supabase
-        .from('database_csr')
-        .select('*')
-        .or(`nik.eq.${cleanNik},nik_csr.eq.${cleanNik}`)
-        .limit(1);
-      
-      if (!error && data && data.length > 0) {
-        const row = data[0];
-        setInputNama(row.nama || row.nama_csr || '');
-        setInputRegion(row.region || '');
-        setInputCluster(row.cluster || '');
-        setInputUnit(row.unitName || row.unit_name || '');
-        setInputJob(row.job || '');
-      }
-    } catch (err) {
-      console.error("Gagal auto-fill CSR:", err);
-    }
-  };
-
-  const uploadFileToDrive = async (fileObj) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(fileObj);
-      reader.onload = async () => {
-        const base64 = reader.result.split(',')[1];
-        try {
-          const res = await fetch(GAS_WEB_APP_URL, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ fileName: fileObj.name, mimeType: fileObj.type, base64 })
-          });
-          const result = await res.json();
-          if (result.status === "success") resolve(result.url);
-          else reject(new Error(result.message || "Gagal upload"));
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.onerror = err => reject(err);
-    });
-  };
-
   const submitManualData = async () => {
-    if (!inputNik.trim() || !inputNama.trim()) {
-      showReadinessToast("Perhatian", "Harap isi NIK dan Nama CSR terlebih dahulu!", "warning");
+    if (!inputUnit.trim() || !inputCatatan.trim()) {
+      showReadinessToast("Perhatian", "Harap isi Unit GraPARI dan Catatan Khusus temuan terlebih dahulu!", "warning");
       return;
     }
     try {
-      let fileUrl = '';
-      if (inputFile) {
-        fileUrl = await uploadFileToDrive(inputFile);
-      }
-
       let { error } = await supabase.from('database_readiness').insert([{
         tanggal: inputDate,
-        nik_csr: inputNik.trim(),
-        nama_csr: inputNama.trim(),
-        region: inputRegion,
-        cluster: inputCluster,
         unit_name: inputUnit.trim(),
-        job: inputJob,
         sumber: 'Manual (SQ)',
         status: 'Temuan',
         kategori: inputKategori,
         catatan: inputCatatan,
-        link_eviden: fileUrl || inputEviden
+        link_eviden: inputEviden
       }]);
       if (error) throw error;
 
@@ -854,7 +790,7 @@ export default function Readiness() {
           <div className="relative h-64"><canvas ref={trendChartRef}></canvas></div>
         </div>
 
-        {/* Chart Kategori Temuan (Grooming, Kehadiran, Fasilitas Layanan) dengan angka tepat di atas batang */}
+        {/* Chart Kategori Temuan (Grooming, Kehadiran, Fasilitas Layanan) */}
         <div className="bg-gradient-to-b from-amber-50/90 via-amber-100/40 to-slate-100 p-6 rounded-3xl border border-amber-200 shadow-md flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <h4 className="text-sm font-extrabold text-amber-950 flex items-center">
@@ -867,7 +803,7 @@ export default function Readiness() {
         <div className="bg-gradient-to-b from-rose-50/90 via-rose-100/40 to-slate-100 p-5 rounded-3xl border border-rose-200 shadow-md flex flex-col h-[332px]">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-[11px] font-black text-rose-950 uppercase tracking-wider flex items-center">
-              <i className="fa-solid fa-circle-exclamation mr-2 text-rose-600 animate-pulse"></i> Unit Belum Ceklis Daily
+              <i className="fa-solid fa-circle-exclamation mr-2 text-rose-600 animate-pulse"></i> Unit Belum Ceklis (Tanggal Akhir)
             </h4>
             <button onClick={downloadMissingUnitsExcel} className="w-7 h-7 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center text-xs shadow-sm transition cursor-pointer" title="Download Excel Unit Belum Ceklis">
               <i className="fa-solid fa-file-excel"></i>
@@ -886,7 +822,7 @@ export default function Readiness() {
 
         <div className="bg-gradient-to-b from-sky-50/90 via-sky-100/40 to-slate-100 p-6 rounded-3xl border border-sky-200 shadow-md flex flex-col justify-between">
           <h4 className="text-sm font-extrabold text-sky-950 mb-4 flex items-center">
-            <i className="fa-solid fa-chart-column text-sky-600 mr-2"></i> Kepatuhan Checklist per Regional Daily
+            <i className="fa-solid fa-chart-column text-sky-600 mr-2"></i> Kepatuhan Checklist per Regional
           </h4>
           <div className="relative h-64"><canvas ref={regionalChartRef}></canvas></div>
         </div>
@@ -1044,83 +980,50 @@ export default function Readiness() {
 
       {/* ================= MODALS (Fade In & Fade Out ala iOS) ================= */}
       
-      {/* 1. Modal Input Manual dengan Fitur Lengkap CSR Form */}
+      {/* 1. Modal Input Manual (Tanpa Lampiran File, hanya Link Eviden) */}
       {showManualModal && ReactDOM.createPortal(
         <div className={`fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 overflow-y-auto transition-opacity duration-200 ${isClosing ? 'opacity-0' : 'animate-[fadeIn_0.2s_ease-out_forwards]'}`} onClick={() => closeModalWithAnimation(setShowManualModal)}>
-          <div className={`w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto transition-all duration-200 ${isClosing ? 'scale-95 opacity-0' : 'animate-[scaleUp_0.2s_ease-out_forwards]'}`} onClick={e => e.stopPropagation()}>
+          <div className={`w-full max-w-xl bg-white rounded-[2rem] shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] my-auto transition-all duration-200 ${isClosing ? 'scale-95 opacity-0' : 'animate-[scaleUp_0.2s_ease-out_forwards]'}`} onClick={e => e.stopPropagation()}>
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-[2rem]">
               <div>
-                <h3 className="text-base font-black tracking-tight text-slate-800">Form Input Sesi Coaching & Counseling / Temuan</h3>
-                <p className="text-[10px] text-slate-500 font-medium mt-0.5">Catat temuan pelanggaran layanan/grooming & pembinaan CSR</p>
+                <h3 className="text-base font-black tracking-tight text-slate-800">Form Input Temuan / Catatan Readiness</h3>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">Catat temuan operasional, grooming, atau fasilitas layanan unit</p>
               </div>
               <button onClick={() => closeModalWithAnimation(setShowManualModal)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-600 hover:bg-rose-500 hover:text-white transition-colors cursor-pointer"><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="p-6 overflow-y-auto space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Tanggal</label>
                   <input type="date" value={inputDate} onChange={e => setInputDate(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition" required />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">NIK CSR (Auto-Fill)</label>
-                  <input type="text" value={inputNik} onChange={e => handleAutoFillInput(e.target.value)} placeholder="Masukkan NIK..." className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition" required />
+                  <label className="block font-bold text-slate-700 mb-1">Unit GraPARI</label>
+                  <input type="text" value={inputUnit} onChange={e => setInputUnit(e.target.value)} list="listMasterInput" placeholder="Ketik atau pilih unit..." className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition" required />
+                  <datalist id="listMasterInput">
+                    {masterUnitList.map((u, i) => <option key={i} value={u} />)}
+                  </datalist>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Nama CSR</label>
-                  <input type="text" value={inputNama} readOnly className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-semibold cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Region</label>
-                  <input type="text" value={inputRegion} readOnly className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-semibold cursor-not-allowed" />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Cluster</label>
-                  <input type="text" value={inputCluster} readOnly className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-medium cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Unit Name</label>
-                  <input type="text" value={inputUnit} readOnly className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-medium cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Job Role</label>
-                  <input type="text" value={inputJob} readOnly className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 font-medium cursor-not-allowed" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Tipe Pembinaan</label>
-                  <select value={inputTipe} onChange={e => setInputTipe(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition cursor-pointer">
-                    <option value="Coaching">Coaching</option>
-                    <option value="Counseling">Counseling</option>
-                    <option value="Surat Peringatan">Surat Peringatan</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Jenis Temuan / Area</label>
-                  <select value={inputArea} onChange={e => setInputArea(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition cursor-pointer">
-                    <option value="Attitude">Attitude</option>
-                    <option value="Skill">Skill</option>
-                    <option value="Knowledge">Knowledge</option>
-                    <option value="Tapping UnderTarget (<85%)">Tapping UnderTarget (&lt;85%)</option>
-                    <option value="Pelanggaran SOP / Fraud">Pelanggaran SOP / Fraud</option>
-                  </select>
-                </div>
-              </div>
+
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Akar Masalah (Root Cause)</label>
-                <textarea rows="2" value={inputRootCause} onChange={e => setInputRootCause(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition" placeholder="Tuliskan akar masalah..."></textarea>
+                <label className="block font-bold text-slate-700 mb-1">Kategori Temuan</label>
+                <select value={inputKategori} onChange={e => setInputKategori(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition cursor-pointer">
+                  <option value="Grooming">Grooming</option>
+                  <option value="Kehadiran">Kehadiran</option>
+                  <option value="Fasilitas">Fasilitas Layanan</option>
+                  <option value="Lainnya">Lainnya</option>
+                </select>
               </div>
+
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Komitmen / Action Plan</label>
-                <textarea rows="2" value={inputKomitmen} onChange={e => setInputKomitmen(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition" placeholder="Tuliskan komitmen perbaikan..."></textarea>
+                <label className="block font-bold text-slate-700 mb-1">Catatan Khusus Temuan</label>
+                <textarea rows="3" value={inputCatatan} onChange={e => setInputCatatan(e.target.value)} className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition resize-none" placeholder="Tuliskan detail catatan temuan..."></textarea>
               </div>
+
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Lampiran Eviden (File)</label>
-                <input type="file" onChange={e => setInputFile(e.target.files[0])} className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl file:mr-4 file:py-1.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 transition cursor-pointer" />
+                <label className="block font-bold text-slate-700 mb-1">Link Eviden (Opsional)</label>
+                <input type="url" value={inputEviden} onChange={e => setInputEviden(e.target.value)} placeholder="https://..." className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition" />
               </div>
             </div>
             <div className="px-6 py-4 border-t border-slate-100 flex justify-end space-x-2 bg-slate-50 rounded-b-[2rem]">
