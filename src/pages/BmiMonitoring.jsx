@@ -144,6 +144,15 @@ export default function BmiMonitoring() {
     document.title = 'Monitoring BMI T-Fronters | Lensa Insight';
   }, []);
 
+  // Mendapatkan nilai YYYY-MM bulan berjalan untuk filter default
+  const getCurrentYearMonth = () => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    return `${yyyy}-${mm}`;
+  };
+  const currentMonthStr = getCurrentYearMonth();
+
   const [bmiData, setBmiData] = useState([]);
   const [csrData, setCsrData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -152,7 +161,9 @@ export default function BmiMonitoring() {
   const [selectedCluster, setSelectedCluster] = useState('');
   const [selectedJob, setSelectedJob] = useState('');
   const [selectedKategori, setSelectedKategori] = useState('');
-  const [selectedPeriode, setSelectedPeriode] = useState('');
+  
+  // Default di set ke bulan berjalan
+  const [selectedPeriode, setSelectedPeriode] = useState(currentMonthStr);
 
   // State untuk Sorting Tabel Utama
   const [sortField, setSortField] = useState('tanggal');
@@ -207,12 +218,12 @@ export default function BmiMonitoring() {
     }
   };
 
+  // Memastikan currentMonthStr selalu ada di list periode, menghindari bug saat bulan baru belum ada data
   const availablePeriods = Array.from(
-    new Set(
-      bmiData
-        .map(item => item.tanggal ? item.tanggal.slice(0, 7) : '')
-        .filter(Boolean)
-    )
+    new Set([
+      currentMonthStr,
+      ...bmiData.map(item => item.tanggal ? item.tanggal.slice(0, 7) : '').filter(Boolean)
+    ])
   ).sort().reverse();
 
   const availableRegions = ['Sulawesi', 'Kalimantan', 'Puma'];

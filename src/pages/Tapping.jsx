@@ -15,12 +15,23 @@ const targetMap = {
 };
 
 export default function Tapping() {
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  // Default bulan berjalan (tanggal awal & akhir bulan saat ini)
+  const currentDate = new Date();
+  const curYear = currentDate.getFullYear();
+  const curMonth = String(currentDate.getMonth() + 1).padStart(2, '0');
+  const defaultStart = `${curYear}-${curMonth}-01`;
+  const lastDayNum = new Date(curYear, currentDate.getMonth() + 1, 0).getDate();
+  const defaultEnd = `${curYear}-${curMonth}-${String(lastDayNum).padStart(2, '0')}`;
+
+  const [startDate, setStartDate] = useState(defaultStart);
+  const [endDate, setEndDate] = useState(defaultEnd);
   const [selectedRegional, setSelectedRegional] = useState('ALL');
+  const [selectedCluster, setSelectedCluster] = useState('ALL');
   const [selectedUnit, setSelectedUnit] = useState('ALL');
   
+  const [globalCsrDb, setGlobalCsrDb] = useState([]);
   const [regionalsList, setRegionalsList] = useState([]);
+  const [clustersList, setClustersList] = useState([]);
   const [unitsList, setUnitsList] = useState([]);
   
   const [summaryData, setSummaryData] = useState({
@@ -39,9 +50,13 @@ export default function Tapping() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailRecord, setSelectedDetailRecord] = useState(null);
   const [isClosingModal, setIsClosingModal] = useState(false);
+  
   const [showRegMenu, setShowRegMenu] = useState(false);
+  const [showClusterMenu, setShowClusterMenu] = useState(false);
   const [showUnitMenu, setShowUnitMenu] = useState(false);
+  
   const [regSearchQuery, setRegSearchQuery] = useState('');
+  const [clusterSearchQuery, setClusterSearchQuery] = useState('');
   const [unitSearchQuery, setUnitSearchQuery] = useState('');
 
   const chartQmRegRef = useRef(null);
@@ -65,23 +80,64 @@ export default function Tapping() {
   const exportContainerRef = useRef(null);
 
   useEffect(() => {
-    loadTappingData();
-  }, [startDate, endDate, selectedRegional, selectedUnit]);
+    loadInitialData();
+  }, []);
+
+  useEffect(() => {
+    if (globalCsrDb.length > 0) {
+      loadTappingData();
+    }
+  }, [startDate, endDate, selectedRegional, selectedCluster, selectedUnit, globalCsrDb]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [currentTab, currentSort, searchQuery]);
 
-  const loadTappingData = async () => {
-    try {
-      // 1. Ambil list regional untuk dropdown
-      const { data: regData } = await supabase.from('nilai_tapping').select('regional');
-      if (regData) {
-        const allRegionals = [...new Set(regData.map(d => d.regional).filter(Boolean))].sort();
-        setRegionalsList(allRegionals);
+  // Fungsi helper untuk mengambil SEMUA baris dari tabel tanpa batas 1000 baris
+  const fetchAllFromTable = async (tableName) => {
+    let allData = [];
+    let limit = 1000;
+    let from = 0;
+    let to = limit - 1;
+    let keepFetching = true;
+
+    while (keepFetching) {
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .range(from, to);
+
+      if (error) {
+        console.error(`Gagal mengambil data dari ${tableName}:`, error);
+        break;
       }
 
-      // 2. Buat query utama ke Supabase dengan filter tanggal dinamis (500 data pertama jika tanggal kosong)
+      if (data && data.length > 0) {
+        allData = allData.concat(data);
+        if (data.length < limit) {
+          keepFetching = false;
+        } else {
+          from += limit;
+          to += limit;
+        }
+      } else {
+        keepFetching = false;
+      }
+    }
+    return allData;
+  };
+
+  const loadInitialData = async () => {
+    try {
+      const csrData = await fetchAllFromTable('database_csr');
+      setGlobalCsrDb(csrData || []);
+    } catch (err) {
+      console.error("Gagal load initial data CSR:", err);
+    }
+  };
+
+  const loadTappingData = async () => {
+    try {
       let query = supabase.from('nilai_tapping').select('*');
 
       if (startDate && endDate) {
@@ -91,7 +147,7 @@ export default function Tapping() {
       } else if (endDate) {
         query = query.lte('tanggal_assessor', endDate);
       } else {
-        query = query.limit(500);
+        query = query.limit(1000);
       }
 
       let { data: tapData, error: tapErr } = await query;
@@ -99,24 +155,61 @@ export default function Tapping() {
 
       const rawData = tapData || [];
 
-      // 3. Filter lanjutan untuk Regional dan Unit di sisi frontend
-      let filteredData = rawData.filter(d => {
+      // Buat lookup map dari database_csr berdasarkan NIK (trim)
+      const csrMap = {};
+      globalCsrDb.forEach(c => {
+        const cNik = String(c.nik || c.nik_csr || '').trim();
+        if (cNik) {
+          csrMap[cNik] = {
+            regional: c.regional || c.region || '',
+            cluster: c.cluster || c.cluster_name || '',
+            unitName: c.unitName || c.unit_name || ''
+          };
+        }
+      });
+
+      // Gabungkan data tapping dengan lookup database_csr
+      const enrichedTappingData = rawData.map(d => {
+        const dNik = String(d.nik || d.nik_csr || '').trim();
+        const csrInfo = csrMap[dNik] || {};
+        return {
+          ...d,
+          lookup_regional: d.regional || csrInfo.regional || 'Unknown',
+          lookup_cluster: d.cluster || csrInfo.cluster || 'Unknown',
+          lookup_unit: d.unit_name || csrInfo.unitName || 'Unknown'
+        };
+      });
+
+      // Update dropdown options berdasarkan data CSR & Tapping
+      const allRegionals = [...new Set(Object.values(csrMap).map(c => c.regional).concat(rawData.map(d => d.regional)).filter(Boolean))].sort();
+      setRegionalsList(allRegionals);
+
+      let filteredCsrForCluster = globalCsrDb;
+      if (selectedRegional !== 'ALL') {
+        filteredCsrForCluster = globalCsrDb.filter(c => (c.regional || c.region) === selectedRegional);
+      }
+      const allClusters = [...new Set(filteredCsrForCluster.map(c => c.cluster || c.cluster_name).filter(Boolean))].sort();
+      setClustersList(allClusters);
+
+      let filteredCsrForUnit = filteredCsrForCluster;
+      if (selectedCluster !== 'ALL') {
+        filteredCsrForUnit = filteredCsrForCluster.filter(c => (c.cluster || c.cluster_name) === selectedCluster);
+      }
+      const allUnits = [...new Set(filteredCsrForUnit.map(c => c.unitName || c.unit_name).concat(rawData.map(d => d.unit_name)).filter(Boolean))].sort();
+      setUnitsList(allUnits);
+
+      // Filter lanjutan untuk Tapping
+      let filteredData = enrichedTappingData.filter(d => {
         let match = true;
         let rawTgl = d.tanggal_assessor || '';
         let tgl = typeof rawTgl === 'string' ? rawTgl.substring(0, 10) : '';
         if (startDate && tgl < startDate) match = false;
         if (endDate && tgl > endDate) match = false;
-        if (selectedRegional !== 'ALL' && d.regional !== selectedRegional) match = false;
+        if (selectedRegional !== 'ALL' && d.lookup_regional !== selectedRegional) match = false;
+        if (selectedCluster !== 'ALL' && d.lookup_cluster !== selectedCluster) match = false;
+        if (selectedUnit !== 'ALL' && d.lookup_unit !== selectedUnit) match = false;
         return match;
       });
-
-      let filteredForUnit = selectedRegional === 'ALL' ? rawData : rawData.filter(d => d.regional === selectedRegional);
-      const allUnits = [...new Set(filteredForUnit.map(d => d.unit_name).filter(Boolean))].sort();
-      setUnitsList(allUnits);
-
-      if (selectedUnit !== 'ALL') {
-        filteredData = filteredData.filter(d => d.unit_name === selectedUnit);
-      }
 
       const summary = buildSummary(filteredData);
       setSummaryData(summary);
@@ -170,7 +263,7 @@ export default function Tapping() {
       if (nSkl < 80) underSkill++;
       if (nKnw < 80) underKnowledge++;
 
-      let reg = d.regional || 'Unknown';
+      let reg = d.lookup_regional || 'Unknown';
       if (!regMap[reg]) regMap[reg] = { regional: reg, sampel: 0, qmSum:0, attSum:0, sklSum:0, knwSum:0 };
       regMap[reg].sampel++; regMap[reg].qmSum += tNilai; regMap[reg].attSum += nAtt; regMap[reg].sklSum += nSkl; regMap[reg].knwSum += nKnw;
 
@@ -199,7 +292,7 @@ export default function Tapping() {
         tanggal: tgl,
         nik: d.nik_csr || '-',
         nama: d.nama_csr || '-',
-        unit: d.unit_name || '-',
+        unit: d.lookup_unit || '-',
         attitude: nAtt,
         skill: nSkl,
         knowledge: nKnw,
@@ -470,7 +563,6 @@ export default function Tapping() {
   const totalPages = Math.ceil(sortedCoaching.length / rowsPerPage) || 1;
   const paginatedCoaching = sortedCoaching.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
-  // LOGIKA PARSER DETAIL TEMUAN DENGAN JUDUL SUB-PARAMETER BERWARNA DINAMIS
   const renderDetailParameters = (rawData) => {
     if (!rawData) return null;
     
@@ -516,7 +608,6 @@ export default function Tapping() {
 
           subElements.push(
             <li key={sub.name} className="mb-4">
-              {/* Judul sub-parameter dengan warna teks dinamis sesuai pilar */}
               <div className={`flex items-center space-x-1.5 mb-1.5 p-2 rounded-xl border inline-flex shadow-xs ${badgeBgClass}`}>
                 <span className="text-xs ml-0.5"><i className="fa-solid fa-angle-right"></i></span>
                 <span className="font-extrabold text-xs pr-2 tracking-tight">Sub Parameter : {sub.name}</span>
@@ -580,7 +671,7 @@ export default function Tapping() {
             </div>
           </div>
           <div className="flex items-center space-x-2.5">
-            <button onClick={() => { setStartDate(''); setEndDate(''); setSelectedRegional('ALL'); setSelectedUnit('ALL'); setSearchQuery(''); }} className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-semibold flex items-center space-x-2 border border-slate-300 shadow-sm cursor-pointer">
+            <button onClick={() => { setStartDate(defaultStart); setEndDate(defaultEnd); setSelectedRegional('ALL'); setSelectedCluster('ALL'); setSelectedUnit('ALL'); setSearchQuery(''); }} className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-semibold flex items-center space-x-2 border border-slate-300 shadow-sm cursor-pointer">
               <i className="fa-solid fa-rotate-left text-xs"></i>
               <span>Reset Filter</span>
             </button>
@@ -595,8 +686,8 @@ export default function Tapping() {
           </div>
         </div>
 
-        {/* Filter Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-4 border-t border-slate-400/70 relative z-40">
+        {/* Filter Bar: Mulai Tanggal -> Sampai Tanggal -> Regional -> Cluster -> Unit Name */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 pt-4 border-t border-slate-400/70 relative z-40">
           <div>
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Mulai Tanggal</label>
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full px-3.5 py-2.5 bg-white border border-slate-400/80 rounded-2xl text-xs font-semibold text-slate-800 shadow-inner outline-none focus:border-red-600" />
@@ -609,7 +700,7 @@ export default function Tapping() {
           {/* Regional Dropdown */}
           <div className="relative">
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Regional</label>
-            <button type="button" onClick={() => setShowRegMenu(!showRegMenu)} className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-400/80 rounded-2xl text-xs font-semibold text-slate-800 text-left flex items-center justify-between shadow-inner cursor-pointer">
+            <button type="button" onClick={() => { setShowRegMenu(!showRegMenu); setShowClusterMenu(false); setShowUnitMenu(false); }} className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-400/80 rounded-2xl text-xs font-semibold text-slate-800 text-left flex items-center justify-between shadow-inner cursor-pointer">
               <span className="truncate">{selectedRegional === 'ALL' ? 'Semua Regional' : selectedRegional}</span>
               <i className="fa-solid fa-chevron-down text-slate-500 text-[10px]"></i>
             </button>
@@ -621,9 +712,33 @@ export default function Tapping() {
                   <input type="text" placeholder="Cari Regional..." value={regSearchQuery} onChange={e => setRegSearchQuery(e.target.value)} className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-red-600" />
                 </div>
                 <div className="max-h-48 overflow-y-auto space-y-0.5">
-                  <div onClick={() => { setSelectedRegional('ALL'); setSelectedUnit('ALL'); setShowRegMenu(false); }} className="px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-600 cursor-pointer">Semua Regional</div>
+                  <div onClick={() => { setSelectedRegional('ALL'); setSelectedCluster('ALL'); setSelectedUnit('ALL'); setShowRegMenu(false); }} className="px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-600 cursor-pointer">Semua Regional</div>
                   {regionalsList.filter(r => r.toLowerCase().includes(regSearchQuery.toLowerCase())).map((r, i) => (
-                    <div key={i} onClick={() => { setSelectedRegional(r); setSelectedUnit('ALL'); setShowRegMenu(false); }} className="px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-600 cursor-pointer">{r}</div>
+                    <div key={i} onClick={() => { setSelectedRegional(r); setSelectedCluster('ALL'); setSelectedUnit('ALL'); setShowRegMenu(false); }} className="px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-600 cursor-pointer">{r}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Cluster Dropdown (Lookup dari database_csr) */}
+          <div className="relative">
+            <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Cluster</label>
+            <button type="button" onClick={() => { setShowClusterMenu(!showClusterMenu); setShowRegMenu(false); setShowUnitMenu(false); }} className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-400/80 rounded-2xl text-xs font-semibold text-slate-800 text-left flex items-center justify-between shadow-inner cursor-pointer">
+              <span className="truncate">{selectedCluster === 'ALL' ? 'Semua Cluster' : selectedCluster}</span>
+              <i className="fa-solid fa-chevron-down text-slate-500 text-[10px]"></i>
+            </button>
+            <i className="fa-solid fa-network-wired absolute left-3.5 top-[31px] text-slate-500 text-xs"></i>
+
+            {showClusterMenu && (
+              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-2 space-y-1">
+                <div className="p-1 border-b border-slate-100 mb-1">
+                  <input type="text" placeholder="Cari Cluster..." value={clusterSearchQuery} onChange={e => setClusterSearchQuery(e.target.value)} className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-red-600" />
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-0.5">
+                  <div onClick={() => { setSelectedCluster('ALL'); setSelectedUnit('ALL'); setShowClusterMenu(false); }} className="px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-600 cursor-pointer">Semua Cluster</div>
+                  {clustersList.filter(c => c.toLowerCase().includes(clusterSearchQuery.toLowerCase())).map((c, i) => (
+                    <div key={i} onClick={() => { setSelectedCluster(c); setSelectedUnit('ALL'); setShowClusterMenu(false); }} className="px-3 py-2 rounded-xl text-xs font-medium text-slate-700 hover:bg-red-50 hover:text-red-600 cursor-pointer">{c}</div>
                   ))}
                 </div>
               </div>
@@ -633,7 +748,7 @@ export default function Tapping() {
           {/* Unit Dropdown */}
           <div className="relative">
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Unit Name</label>
-            <button type="button" onClick={() => setShowUnitMenu(!showUnitMenu)} className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-400/80 rounded-2xl text-xs font-semibold text-slate-800 text-left flex items-center justify-between shadow-inner cursor-pointer">
+            <button type="button" onClick={() => { setShowUnitMenu(!showUnitMenu); setShowRegMenu(false); setShowClusterMenu(false); }} className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-400/80 rounded-2xl text-xs font-semibold text-slate-800 text-left flex items-center justify-between shadow-inner cursor-pointer">
               <span className="truncate">{selectedUnit === 'ALL' ? 'Semua Unit Name' : selectedUnit}</span>
               <i className="fa-solid fa-chevron-down text-slate-500 text-[10px]"></i>
             </button>

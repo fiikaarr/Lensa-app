@@ -9,11 +9,20 @@ Chart.register(ChartDataLabels);
 
 const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzGef1rY95Af6g1iOtS5VONWusA-uCLZZmK8nGrgPHdVKscVPH15JH32RX7CQ4yV6wq2w/exec";
 
+// Helper untuk mendapatkan format YYYY-MM bulan berjalan
+const getCurrentYearMonth = () => {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  return `${yyyy}-${mm}`;
+};
+
 export default function Coaching() {
   const [coachList, setCoachList] = useState([]);
   const [csrDatabase, setCsrDatabase] = useState([]);
   
-  const [filterPeriode, setFilterPeriode] = useState('');
+  // State filter periode default diset ke bulan berjalan
+  const [filterPeriode, setFilterPeriode] = useState(getCurrentYearMonth());
   const [filterRegion, setFilterRegion] = useState('ALL');
   const [filterUnit, setFilterUnit] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -519,7 +528,7 @@ export default function Coaching() {
             </div>
           </div>
           <div className="flex items-center space-x-2.5">
-            <button onClick={() => { setFilterPeriode(''); setFilterRegion('ALL'); setFilterUnit('ALL'); setSearchQuery(''); setStatusSortState('none'); }} className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-semibold flex items-center space-x-2 transition border border-slate-300 shadow-sm cursor-pointer backdrop-blur-md">
+            <button onClick={() => { setFilterPeriode(getCurrentYearMonth()); setFilterRegion('ALL'); setFilterUnit('ALL'); setSearchQuery(''); setStatusSortState('none'); }} className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-semibold flex items-center space-x-2 transition border border-slate-300 shadow-sm cursor-pointer backdrop-blur-md">
               <i className="fa-solid fa-rotate-left text-xs"></i>
               <span>Reset Filter</span>
             </button>

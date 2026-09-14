@@ -23,11 +23,16 @@ export default function Readiness() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // Setup default bulan berjalan (tanggal awal & akhir bulan saat ini)
   const today = new Date();
-  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const curYear = today.getFullYear();
+  const curMonth = String(today.getMonth() + 1).padStart(2, '0');
+  const defaultStart = `${curYear}-${curMonth}-01`;
+  const lastDayNum = new Date(curYear, today.getMonth() + 1, 0).getDate();
+  const defaultEnd = `${curYear}-${curMonth}-${String(lastDayNum).padStart(2, '0')}`;
 
-  const [filterStartDate, setFilterStartDate] = useState(firstDayOfMonth.toISOString().slice(0, 10));
-  const [filterEndDate, setFilterEndDate] = useState(today.toISOString().slice(0, 10));
+  const [filterStartDate, setFilterStartDate] = useState(defaultStart);
+  const [filterEndDate, setFilterEndDate] = useState(defaultEnd);
   const [filterRegion, setFilterRegion] = useState('ALL');
   const [filterSource, setFilterSource] = useState('ALL');
   const [searchReadiness, setSearchReadiness] = useState('');
@@ -803,7 +808,7 @@ export default function Readiness() {
         <div className="bg-gradient-to-b from-rose-50/90 via-rose-100/40 to-slate-100 p-5 rounded-3xl border border-rose-200 shadow-md flex flex-col h-[332px]">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-[11px] font-black text-rose-950 uppercase tracking-wider flex items-center">
-              <i className="fa-solid fa-circle-exclamation mr-2 text-rose-600 animate-pulse"></i> Unit Belum Ceklis (Tanggal Akhir)
+              <i className="fa-solid fa-circle-exclamation mr-2 text-rose-600 animate-pulse"></i> Unit Belum Ceklis Harian
             </h4>
             <button onClick={downloadMissingUnitsExcel} className="w-7 h-7 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center text-xs shadow-sm transition cursor-pointer" title="Download Excel Unit Belum Ceklis">
               <i className="fa-solid fa-file-excel"></i>
@@ -822,7 +827,7 @@ export default function Readiness() {
 
         <div className="bg-gradient-to-b from-sky-50/90 via-sky-100/40 to-slate-100 p-6 rounded-3xl border border-sky-200 shadow-md flex flex-col justify-between">
           <h4 className="text-sm font-extrabold text-sky-950 mb-4 flex items-center">
-            <i className="fa-solid fa-chart-column text-sky-600 mr-2"></i> Kepatuhan Checklist per Regional
+            <i className="fa-solid fa-chart-column text-sky-600 mr-2"></i> Kepatuhan Checklist per Regional Harian
           </h4>
           <div className="relative h-64"><canvas ref={regionalChartRef}></canvas></div>
         </div>

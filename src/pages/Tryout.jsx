@@ -7,8 +7,17 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 Chart.register(ChartDataLabels);
 
 export default function TryOut() {
-  const [filterTahun, setFilterTahun] = useState('ALL');
-  const [filterBulan, setFilterBulan] = useState('ALL');
+  // Default bulan berjalan (Tahun dan Bulan saat ini)
+  const currentDate = new Date();
+  const currentYearStr = String(currentDate.getFullYear());
+  const monthNames = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ];
+  const currentMonthStr = monthNames[currentDate.getMonth()];
+
+  const [filterTahun, setFilterTahun] = useState(currentYearStr);
+  const [filterBulan, setFilterBulan] = useState(currentMonthStr);
   const [filterMinggu, setFilterMinggu] = useState('ALL');
   const [filterRegion, setFilterRegion] = useState('ALL');
   const [filterUnit, setFilterUnit] = useState('ALL');
@@ -24,7 +33,7 @@ export default function TryOut() {
   const [regionSearch, setRegionSearch] = useState('');
   const [unitSearch, setUnitSearch] = useState('');
 
-  const [availableYears, setAvailableYears] = useState(['2026']);
+  const [availableYears, setAvailableYears] = useState([currentYearStr]);
   const [unitsList, setUnitsList] = useState([]);
   const [globalCsrDatabase, setGlobalCsrDatabase] = useState([]);
 
@@ -144,15 +153,14 @@ export default function TryOut() {
           const d = new Date(tanggalStr);
           if (!isNaN(d)) {
             tahun = String(d.getFullYear());
-            const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
             bulan = monthNames[d.getMonth()];
           }
         }
 
         return {
           id: row.id,
-          tahun: tahun || '2026',
-          bulan: bulan || 'Januari',
+          tahun: tahun || currentYearStr,
+          bulan: bulan || currentMonthStr,
           minggu: row.minggu || row.minggu_ke || 'Satu',
           nik: nik,
           nama: row.nama || row.nama_csr || foundCsr?.nama || foundCsr?.nama_csr || foundCsr?.name || '-',
@@ -164,7 +172,7 @@ export default function TryOut() {
       });
 
       const years = [...new Set(enrichedList.map(i => i.tahun).filter(Boolean))].sort().reverse();
-      if (years.length === 0) years.push('2026');
+      if (years.length === 0) years.push(currentYearStr);
       setAvailableYears(years);
 
       const filteredList = enrichedList.filter(item => {
@@ -265,8 +273,8 @@ export default function TryOut() {
   };
 
   const resetTOFilters = () => {
-    setFilterTahun('ALL');
-    setFilterBulan('ALL');
+    setFilterTahun(currentYearStr);
+    setFilterBulan(currentMonthStr);
     setFilterMinggu('ALL');
     setFilterRegion('ALL');
     setFilterUnit('ALL');
