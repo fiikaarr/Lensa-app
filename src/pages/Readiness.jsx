@@ -762,7 +762,7 @@ export default function Readiness() {
 
         <div className="relative bg-gradient-to-br from-indigo-600 to-indigo-900 p-5 rounded-3xl border border-indigo-500 shadow-[0_12px_25px_-5px_rgba(79,70,229,0.4)] flex items-center justify-between text-white">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-wider text-indigo-200">Cheklist Compliance</p>
+            <p className="text-[11px] font-black uppercase tracking-wider text-indigo-200">Cheklist Compliance Daily</p>
             <div className="flex items-end space-x-2 mt-1">
               <h4 className="text-3xl font-black text-white drop-shadow-md">{cardCompliance}</h4>
               <span className="text-xs font-medium text-indigo-200 mb-1">{cardComplianceSub}</span>
@@ -773,7 +773,7 @@ export default function Readiness() {
 
         <div className="relative bg-gradient-to-br from-slate-700 to-slate-950 p-5 rounded-3xl border border-slate-600 shadow-[0_12px_25px_-5px_rgba(15,23,42,0.4)] flex items-center justify-between text-white">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-wider text-slate-300">Belum Ceklis Raisa</p>
+            <p className="text-[11px] font-black uppercase tracking-wider text-slate-300">Belum Ceklis Raisa Daily</p>
             <h4 className="text-3xl font-black mt-1 text-rose-400 drop-shadow-md">{cardMissing}</h4>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md text-white flex items-center justify-center text-xl shadow-inner border border-white/20"><i className="fa-solid fa-user-clock"></i></div>
