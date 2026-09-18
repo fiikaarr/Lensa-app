@@ -1104,7 +1104,7 @@ export default function Tapping() {
         <div className={`fixed inset-0 bg-slate-950/70 backdrop-blur-md transition-opacity duration-200 flex items-center justify-center z-[99999] p-4 ${isClosingModal ? 'opacity-0' : 'animate-[fadeIn_0.2s_ease-out_forwards]'}`} onClick={handleCloseDetail}>
           <div className={`bg-slate-100 rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden border border-slate-300 transition-all duration-200 ${isClosingModal ? 'scale-95 opacity-0' : 'animate-[scaleUp_0.2s_ease-out_forwards]'}`} onClick={e => e.stopPropagation()}>
             
-            {/* Header Modal */}
+            {/* Header Modal (DENGAN TAMBAHAN KIP INTERACTION) */}
             <div className="bg-white px-6 py-4 border-b border-slate-200 flex items-center justify-between relative shadow-xs">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 rounded-xl bg-red-100 text-red-600 flex items-center justify-center text-sm font-bold shadow-sm">
@@ -1112,7 +1112,18 @@ export default function Tapping() {
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-slate-900 tracking-tight">Resume Detail Temuan</h3>
-                  <p className="text-[11px] font-semibold text-slate-500">{selectedDetailRecord.nama} ({selectedDetailRecord.nik}) - {selectedDetailRecord.tanggal}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                    <p className="text-[11px] font-semibold text-slate-500">
+                      {selectedDetailRecord.nama} ({selectedDetailRecord.nik}) - {selectedDetailRecord.tanggal}
+                    </p>
+                    
+                    {/* BAGIAN BADGE KIP INTERACTION */}
+                    {selectedDetailRecord.rawData?.kip_interaction && selectedDetailRecord.rawData.kip_interaction.trim() !== '' && selectedDetailRecord.rawData.kip_interaction.trim() !== '-' && (
+                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-[9px] font-black tracking-wide uppercase shadow-sm">
+                        KIP: {selectedDetailRecord.rawData.kip_interaction}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <button onClick={handleCloseDetail} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-red-500 hover:text-white text-slate-600 flex items-center justify-center transition cursor-pointer">
