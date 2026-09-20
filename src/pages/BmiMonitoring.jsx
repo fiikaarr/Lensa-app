@@ -63,9 +63,10 @@ const exportToExcel = (data, fileName) => {
   XLSX.writeFile(workbook, `${fileName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 };
 
-// Komponen Modern Combobox yang bisa diketik & ada tirai dropdown ke bawah
-function ModernCombobox({ label, value, onChange, options }) {
+// Komponen Multiple Select Dropdown Modern dengan Checkbox & Pencarian (Ukuran Compact untuk 1 Line)
+function MultiSelectDropdown({ label, values, onChange, options }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const wrapperRef = useRef(null);
 
   useEffect(() => {
@@ -79,60 +80,83 @@ function ModernCombobox({ label, value, onChange, options }) {
   }, []);
 
   const filteredOptions = options.filter(opt => 
-    String(opt).toLowerCase().includes(String(value || '').toLowerCase())
+    String(opt).toLowerCase().includes(String(search || '').toLowerCase())
   );
 
+  const handleToggle = (opt) => {
+    if (values.includes(opt)) {
+      onChange(values.filter(v => v !== opt));
+    } else {
+      onChange([...values, opt]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    onChange([...options]);
+  };
+
+  const handleClearAll = () => {
+    onChange([]);
+  };
+
+  const displayText = values.length === 0 
+    ? `${label}` 
+    : values.length === 1 
+    ? values[0] 
+    : `${label} (${values.length})`;
+
   return (
-    <div className="relative w-44" ref={wrapperRef}>
-      <div className="relative">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => {
-            onChange(e.target.value);
-            setIsOpen(true);
-          }}
-          onFocus={() => setIsOpen(true)}
-          placeholder={label}
-          className="w-full px-4 py-3 bg-white border border-slate-300 rounded-2xl text-xs font-bold text-slate-800 focus:border-indigo-600 outline-none shadow-sm pr-8 truncate"
-        />
-        <div 
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 cursor-pointer pointer-events-none"
-          onClick={() => setIsOpen(!isOpen)}
-        >
-          <i className={`fa-solid fa-chevron-down text-[10px] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}></i>
-        </div>
+    <div className="relative flex-1 min-w-[130px]" ref={wrapperRef}>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-2xl text-[11px] font-bold text-slate-800 focus:border-indigo-600 outline-none shadow-sm cursor-pointer flex items-center justify-between truncate"
+      >
+        <span className="truncate">{displayText}</span>
+        <i className={`fa-solid fa-chevron-down text-[9px] text-slate-400 transition-transform duration-200 ml-1 ${isOpen ? 'rotate-180' : ''}`}></i>
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-56 overflow-y-auto py-1 divide-y divide-slate-50 animate-in fade-in zoom-in-95 duration-150">
-          <div
-            onClick={() => {
-              onChange('');
-              setIsOpen(false);
-            }}
-            className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer transition"
-          >
-            {label} (Semua)
+        <div className="absolute z-50 left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 space-y-2 animate-in fade-in zoom-in-95 duration-150 min-w-[180px]">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <span className="text-[10px] font-black uppercase text-slate-500">{label}</span>
+            <div className="space-x-2">
+              <button type="button" onClick={handleSelectAll} className="text-[10px] font-bold text-indigo-600 hover:underline">Semua</button>
+              <span className="text-slate-300">|</span>
+              <button type="button" onClick={handleClearAll} className="text-[10px] font-bold text-rose-600 hover:underline">Reset</button>
+            </div>
           </div>
-          {filteredOptions.length === 0 ? (
-            <div className="px-4 py-2.5 text-xs text-slate-400 italic">Tidak ditemukan</div>
-          ) : (
-            filteredOptions.map((opt, idx) => (
-              <div
-                key={idx}
-                onClick={() => {
-                  onChange(opt);
-                  setIsOpen(false);
-                }}
-                className={`px-4 py-2.5 text-xs font-bold cursor-pointer transition ${
-                  value === opt ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-100'
-                }`}
-              >
-                {opt}
-              </div>
-            ))
-          )}
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={`Cari ${label}...`}
+            className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-600 font-semibold"
+          />
+          <div className="max-h-48 overflow-y-auto space-y-1">
+            {filteredOptions.length === 0 ? (
+              <div className="px-2 py-2 text-xs text-slate-400 italic text-center">Tidak ditemukan</div>
+            ) : (
+              filteredOptions.map((opt, idx) => {
+                const isSelected = values.includes(opt);
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => handleToggle(opt)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold cursor-pointer transition flex items-center justify-between ${
+                      isSelected ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="truncate pr-2">{opt}</span>
+                    <div className={`w-4 h-4 rounded-md border flex items-center justify-center text-[10px] ${
+                      isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'
+                    }`}>
+                      {isSelected && <i className="fa-solid fa-check"></i>}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -144,7 +168,6 @@ export default function BmiMonitoring() {
     document.title = 'Monitoring BMI T-Fronters | Lensa Insight';
   }, []);
 
-  // Mendapatkan nilai YYYY-MM bulan berjalan untuk filter default
   const getCurrentYearMonth = () => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -157,19 +180,20 @@ export default function BmiMonitoring() {
   const [csrData, setCsrData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRegion, setSelectedRegion] = useState('');
-  const [selectedCluster, setSelectedCluster] = useState('');
-  const [selectedJob, setSelectedJob] = useState('');
-  const [selectedKategori, setSelectedKategori] = useState('');
   
-  // Default di set ke bulan berjalan
-  const [selectedPeriode, setSelectedPeriode] = useState(currentMonthStr);
+  // Filter States (Multiple Select Arrays)
+  const [selectedPeriodes, setSelectedPeriodes] = useState([currentMonthStr]);
+  const [selectedRegions, setSelectedRegions] = useState([]);
+  const [selectedClusters, setSelectedClusters] = useState([]);
+  const [selectedMitras, setSelectedMitras] = useState([]);
+  const [selectedJobs, setSelectedJobs] = useState([]);
+  const [selectedKategoris, setSelectedKategoris] = useState([]);
 
   // State untuk Sorting Tabel Utama
   const [sortField, setSortField] = useState('tanggal');
   const [sortDirection, setSortDirection] = useState('desc');
 
-  // State untuk Paging Tabel Utama (Maksimal 20 baris per halaman)
+  // State untuk Paging Tabel Utama
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
 
@@ -218,25 +242,50 @@ export default function BmiMonitoring() {
     }
   };
 
-  // Memastikan currentMonthStr selalu ada di list periode, menghindari bug saat bulan baru belum ada data
-  const availablePeriods = Array.from(
+  // Helper untuk lookup field data
+  const getRecordRegion = (item) => item.region || item.regional || '';
+  const getRecordCluster = (item) => item.cluster || item.cluster_name || '';
+  const getRecordMitra = (item) => item.mitra || item.vendor || item.mitra_csr || item.mitra_name || 'Lainnya';
+  const getRecordJob = (item) => item.job || item.job_role || '';
+  const getRecordPeriode = (item) => item.tanggal ? item.tanggal.slice(0, 7) : '';
+
+  // Cascading Dropdown Options Calculation
+  const allPeriods = Array.from(
     new Set([
       currentMonthStr,
-      ...bmiData.map(item => item.tanggal ? item.tanggal.slice(0, 7) : '').filter(Boolean)
+      ...bmiData.map(getRecordPeriode).filter(Boolean)
     ])
   ).sort().reverse();
 
-  const availableRegions = ['Sulawesi', 'Kalimantan', 'Puma'];
-  
-  const availableClusters = Array.from(
-    new Set(bmiData.map(item => item.cluster).filter(Boolean))
-  );
+  const allRegions = Array.from(
+    new Set([...bmiData.map(getRecordRegion), ...csrData.map(getRecordRegion)].filter(Boolean))
+  ).sort();
 
-  const availableJobs = Array.from(
-    new Set(bmiData.map(item => item.job).filter(Boolean))
-  );
+  // Cluster difilter berdasarkan Region yang dipilih
+  const clustersSource = [...bmiData, ...csrData].filter(item => {
+    if (selectedRegions.length > 0 && !selectedRegions.includes(getRecordRegion(item))) return false;
+    return true;
+  });
+  const allClusters = Array.from(new Set(clustersSource.map(getRecordCluster).filter(Boolean))).sort();
 
-  const availableKategori = [
+  // Mitra difilter berdasarkan Region & Cluster yang dipilih
+  const mitrasSource = [...bmiData, ...csrData].filter(item => {
+    if (selectedRegions.length > 0 && !selectedRegions.includes(getRecordRegion(item))) return false;
+    if (selectedClusters.length > 0 && !selectedClusters.includes(getRecordCluster(item))) return false;
+    return true;
+  });
+  const allMitras = Array.from(new Set(mitrasSource.map(getRecordMitra).filter(Boolean))).sort();
+
+  // Job difilter berdasarkan Region, Cluster, & Mitra yang dipilih
+  const jobsSource = [...bmiData, ...csrData].filter(item => {
+    if (selectedRegions.length > 0 && !selectedRegions.includes(getRecordRegion(item))) return false;
+    if (selectedClusters.length > 0 && !selectedClusters.includes(getRecordCluster(item))) return false;
+    if (selectedMitras.length > 0 && !selectedMitras.includes(getRecordMitra(item))) return false;
+    return true;
+  });
+  const allJobs = Array.from(new Set(jobsSource.map(getRecordJob).filter(Boolean))).sort();
+
+  const allKategori = [
     'Normal (Ideal)',
     'Kelebihan Berat Badan (Overweight)',
     'Obesitas (Obesity)',
@@ -255,20 +304,26 @@ export default function BmiMonitoring() {
 
   // Logika Filter Utama yang diterapkan ke seluruh komponen di bawahnya
   const filteredData = bmiData.filter(item => {
+    const reg = getRecordRegion(item);
+    const cls = getRecordCluster(item);
+    const mit = getRecordMitra(item);
+    const job = getRecordJob(item);
+    const kat = item.kategori || '';
+    const per = getRecordPeriode(item);
+
     const matchSearch = 
       String(item.nik_csr || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(item.nama_csr || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(item.unit_name || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchRegion = !selectedRegion || item.region?.toLowerCase() === selectedRegion.toLowerCase();
-    const matchCluster = !selectedCluster || item.cluster?.toLowerCase() === selectedCluster.toLowerCase();
-    const matchJob = !selectedJob || item.job?.toLowerCase() === selectedJob.toLowerCase();
-    const matchKategori = !selectedKategori || item.kategori?.toLowerCase().includes(selectedKategori.toLowerCase());
-    
-    const itemPeriode = item.tanggal ? item.tanggal.slice(0, 7) : '';
-    const matchPeriode = !selectedPeriode || itemPeriode === selectedPeriode;
+    const matchRegion = selectedRegions.length === 0 || selectedRegions.includes(reg);
+    const matchCluster = selectedClusters.length === 0 || selectedClusters.includes(cls);
+    const matchMitra = selectedMitras.length === 0 || selectedMitras.includes(mit);
+    const matchJob = selectedJobs.length === 0 || selectedJobs.includes(job);
+    const matchKategori = selectedKategoris.length === 0 || selectedKategoris.some(k => kat.toLowerCase().includes(k.toLowerCase()));
+    const matchPeriode = selectedPeriodes.length === 0 || selectedPeriodes.includes(per);
 
-    return matchSearch && matchRegion && matchCluster && matchJob && matchKategori && matchPeriode;
+    return matchSearch && matchRegion && matchCluster && matchMitra && matchJob && matchKategori && matchPeriode;
   }).sort((a, b) => {
     let valA = a[sortField];
     let valB = b[sortField];
@@ -292,7 +347,7 @@ export default function BmiMonitoring() {
     setCurrentPage(1);
     setPageUnsubmitted(1);
     setPageStreak(1);
-  }, [searchTerm, selectedRegion, selectedCluster, selectedJob, selectedKategori, selectedPeriode]);
+  }, [searchTerm, selectedRegions, selectedClusters, selectedMitras, selectedJobs, selectedKategoris, selectedPeriodes]);
 
   // Kalkulasi Pagination Tabel Utama
   const indexOfLastRow = currentPage * rowsPerPage;
@@ -311,26 +366,35 @@ export default function BmiMonitoring() {
     const csrNik = String(csr.nik || csr.nik_csr || '').trim();
     if (!csrNik) return false;
 
-    if (selectedPeriode) {
-      const hasSubmittedInPeriod = bmiData.some(b => {
-        const bNik = String(b.nik_csr || '').trim();
-        const bPeriode = b.tanggal ? b.tanggal.slice(0, 7) : '';
-        return bNik === csrNik && bPeriode === selectedPeriode;
+    const csrReg = getRecordRegion(csr);
+    const csrCls = getRecordCluster(csr);
+    const csrMit = getRecordMitra(csr);
+    const csrJob = getRecordJob(csr);
+
+    if (selectedRegions.length > 0 && !selectedRegions.includes(csrReg)) return false;
+    if (selectedClusters.length > 0 && !selectedClusters.includes(csrCls)) return false;
+    if (selectedMitras.length > 0 && !selectedMitras.includes(csrMit)) return false;
+    if (selectedJobs.length > 0 && !selectedJobs.includes(csrJob)) return false;
+
+    if (selectedPeriodes.length > 0) {
+      const hasSubmitted = selectedPeriodes.some(per => {
+        return bmiData.some(b => {
+          const bNik = String(b.nik_csr || '').trim();
+          const bPer = getRecordPeriode(b);
+          return bNik === csrNik && bPer === per;
+        });
       });
-      return !hasSubmittedInPeriod;
+      return !hasSubmitted;
     } else {
       const hasSubmittedAny = bmiData.some(b => String(b.nik_csr || '').trim() === csrNik);
       return !hasSubmittedAny;
     }
   }).filter(csr => {
-    const matchRegion = !selectedRegion || (csr.region || '').toLowerCase() === selectedRegion.toLowerCase();
-    const matchCluster = !selectedCluster || (csr.cluster || '').toLowerCase() === selectedCluster.toLowerCase();
-    const matchJob = !selectedJob || (csr.job || '').toLowerCase() === selectedJob.toLowerCase();
     const matchSearch = !searchTerm || 
       String(csr.nik || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(csr.nama || csr.nama_csr || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       String(csr.unitName || csr.unit_name || '').toLowerCase().includes(searchTerm.toLowerCase());
-    return matchRegion && matchCluster && matchJob && matchSearch;
+    return matchSearch;
   });
 
   const indexOfLastUnsub = pageUnsubmitted * rowsPerPageExtra;
@@ -377,10 +441,11 @@ export default function BmiMonitoring() {
             result.push({
               nik_csr: nik,
               nama_csr: r3.nama_csr || r1.nama_csr,
-              region: r3.region || r1.region,
-              cluster: r3.cluster || r1.cluster,
+              region: getRecordRegion(r3),
+              cluster: getRecordCluster(r3),
+              mitra: getRecordMitra(r3),
               unit_name: r3.unit_name || r1.unit_name,
-              job: r3.job || r1.job,
+              job: getRecordJob(r3),
               periode_streak: `${r1.tanggal.slice(0, 7)}, ${r2.tanggal.slice(0, 7)}, ${r3.tanggal.slice(0, 7)}`,
               kategori_terakhir: r3.kategori,
               last_record: r3
@@ -392,14 +457,15 @@ export default function BmiMonitoring() {
     });
 
     return result.filter(item => {
-      const matchRegion = !selectedRegion || (item.region || '').toLowerCase() === selectedRegion.toLowerCase();
-      const matchCluster = !selectedCluster || (item.cluster || '').toLowerCase() === selectedCluster.toLowerCase();
-      const matchJob = !selectedJob || (item.job || '').toLowerCase() === selectedJob.toLowerCase();
+      const matchRegion = selectedRegions.length === 0 || selectedRegions.includes(item.region);
+      const matchCluster = selectedClusters.length === 0 || selectedClusters.includes(item.cluster);
+      const matchMitra = selectedMitras.length === 0 || selectedMitras.includes(item.mitra);
+      const matchJob = selectedJobs.length === 0 || selectedJobs.includes(item.job);
       const matchSearch = !searchTerm || 
         String(item.nik_csr || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         String(item.nama_csr || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         String(item.unit_name || '').toLowerCase().includes(searchTerm.toLowerCase());
-      return matchRegion && matchCluster && matchJob && matchSearch;
+      return matchRegion && matchCluster && matchMitra && matchJob && matchSearch;
     });
   };
 
@@ -409,23 +475,29 @@ export default function BmiMonitoring() {
   const currentStreakRows = streakList.slice(indexOfFirstStreak, indexOfLastStreak);
   const totalPagesStreak = Math.ceil(streakList.length / rowsPerPageExtra) || 1;
 
-  // Helper untuk membuat Dataset Chart Bar (Regional & Job) menggunakan filteredData
+  // Helper untuk membuat Dataset Chart Bar (Regional & Job)
   const generateChartDataByGroup = (groupKey) => {
-    const groups = Array.from(new Set(filteredData.map(i => i[groupKey]).filter(Boolean))).sort();
+    const groups = Array.from(new Set(filteredData.map(i => {
+      if (groupKey === 'region') return getRecordRegion(i);
+      if (groupKey === 'job') return getRecordJob(i);
+      return i[groupKey];
+    }).filter(Boolean))).sort();
 
     const normalArr = [];
     const underArr = [];
     const overArr = [];
 
     groups.forEach(group => {
-      const groupData = filteredData.filter(i => i[groupKey] === group);
+      const groupData = filteredData.filter(i => {
+        let val = groupKey === 'region' ? getRecordRegion(i) : (groupKey === 'job' ? getRecordJob(i) : i[groupKey]);
+        return val === group;
+      });
       normalArr.push(groupData.filter(i => i.kategori?.includes('Normal')).length);
       underArr.push(groupData.filter(i => i.kategori?.includes('Kekurangan')).length);
       overArr.push(groupData.filter(i => i.kategori?.includes('Overweight') || i.kategori?.includes('Obesitas')).length);
     });
 
     let themeColors = { normal: '#10b981', under: '#f59e0b', over: '#f43f5e' };
-
     if (groupKey === 'region') {
       themeColors = { normal: '#06b6d4', under: '#fbbf24', over: '#6366f1' };
     } else if (groupKey === 'job') {
@@ -435,29 +507,14 @@ export default function BmiMonitoring() {
     return {
       labels: groups.length > 0 ? groups : ['Tidak Ada Data'],
       datasets: [
-        {
-          label: 'Normal / Ideal',
-          data: normalArr.length > 0 ? normalArr : [0],
-          backgroundColor: themeColors.normal,
-          borderRadius: 8,
-        },
-        {
-          label: 'Underweight',
-          data: underArr.length > 0 ? underArr : [0],
-          backgroundColor: themeColors.under,
-          borderRadius: 8,
-        },
-        {
-          label: 'Overweight / Obesitas',
-          data: overArr.length > 0 ? overArr : [0],
-          backgroundColor: themeColors.over,
-          borderRadius: 8,
-        },
+        { label: 'Normal / Ideal', data: normalArr.length > 0 ? normalArr : [0], backgroundColor: themeColors.normal, borderRadius: 8 },
+        { label: 'Underweight', data: underArr.length > 0 ? underArr : [0], backgroundColor: themeColors.under, borderRadius: 8 },
+        { label: 'Overweight / Obesitas', data: overArr.length > 0 ? overArr : [0], backgroundColor: themeColors.over, borderRadius: 8 },
       ],
     };
   };
 
-  // Helper untuk membuat Dataset Line Chart (Tren Waktu Pengukuran / Monthly Trend) menggunakan filteredData
+  // Helper untuk Line Chart Tren Waktu Pengukuran
   const generateMonthlyTrendData = () => {
     const months = Array.from(
       new Set(
@@ -472,7 +529,6 @@ export default function BmiMonitoring() {
 
     months.forEach(month => {
       const monthData = filteredData.filter(i => i.tanggal && i.tanggal.slice(0, 7) === month);
-      
       const totalBmi = monthData.reduce((acc, curr) => acc + (Number(curr.nilai_bmi) || 0), 0);
       const avgBmi = monthData.length > 0 ? Number((totalBmi / monthData.length).toFixed(1)) : 0;
       avgBmiArr.push(avgBmi);
@@ -484,22 +540,8 @@ export default function BmiMonitoring() {
     return {
       labels: months.length > 0 ? months : ['Belum Ada Data'],
       datasets: [
-        {
-          label: 'Rata-rata BMI',
-          data: avgBmiArr.length > 0 ? avgBmiArr : [0],
-          borderColor: '#7c3aed',
-          backgroundColor: '#7c3aed',
-          tension: 0.3,
-          yAxisID: 'y',
-        },
-        {
-          label: 'Kasus Overweight/Obesitas',
-          data: overweightArr.length > 0 ? overweightArr : [0],
-          borderColor: '#e11d48',
-          backgroundColor: '#e11d48',
-          tension: 0.3,
-          yAxisID: 'y1',
-        }
+        { label: 'Rata-rata BMI', data: avgBmiArr.length > 0 ? avgBmiArr : [0], borderColor: '#7c3aed', backgroundColor: '#7c3aed', tension: 0.3, yAxisID: 'y' },
+        { label: 'Kasus Overweight/Obesitas', data: overweightArr.length > 0 ? overweightArr : [0], borderColor: '#e11d48', backgroundColor: '#e11d48', tension: 0.3, yAxisID: 'y1' }
       ]
     };
   };
@@ -507,86 +549,36 @@ export default function BmiMonitoring() {
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    layout: {
-      padding: { top: 28 }
-    },
+    layout: { padding: { top: 28 } },
     plugins: {
       datalabels: { display: false },
       legend: {
         position: 'bottom',
-        labels: {
-          font: { weight: 'bold', size: 10 },
-          color: '#334155',
-          boxWidth: 12,
-          useBorderRadius: true,
-          borderRadius: 4
-        }
+        labels: { font: { weight: 'bold', size: 10 }, color: '#334155', boxWidth: 12, useBorderRadius: true, borderRadius: 4 }
       },
-      tooltip: {
-        backgroundColor: '#0f172a',
-        titleFont: { weight: 'bold', size: 12 },
-        bodyFont: { size: 11 },
-        padding: 12,
-        cornerRadius: 10
-      }
+      tooltip: { backgroundColor: '#0f172a', titleFont: { weight: 'bold', size: 12 }, bodyFont: { size: 11 }, padding: 12, cornerRadius: 10 }
     },
     scales: {
-      x: {
-        grid: { display: false },
-        ticks: { font: { weight: 'bold', size: 11 }, color: '#334155' }
-      },
-      y: {
-        display: false,
-        grid: { display: false },
-        ticks: { display: false }
-      }
+      x: { grid: { display: false }, ticks: { font: { weight: 'bold', size: 11 }, color: '#334155' } },
+      y: { display: false, grid: { display: false }, ticks: { display: false } }
     }
   };
 
   const lineChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    layout: {
-      padding: { top: 20 }
-    },
+    layout: { padding: { top: 20 } },
     plugins: {
       legend: {
         position: 'bottom',
-        labels: {
-          font: { weight: 'bold', size: 10 },
-          color: '#334155',
-          boxWidth: 12,
-          useBorderRadius: true,
-          borderRadius: 4
-        }
+        labels: { font: { weight: 'bold', size: 10 }, color: '#334155', boxWidth: 12, useBorderRadius: true, borderRadius: 4 }
       },
-      tooltip: {
-        backgroundColor: '#0f172a',
-        titleFont: { weight: 'bold', size: 12 },
-        bodyFont: { size: 11 },
-        padding: 12,
-        cornerRadius: 10
-      }
+      tooltip: { backgroundColor: '#0f172a', titleFont: { weight: 'bold', size: 12 }, bodyFont: { size: 11 }, padding: 12, cornerRadius: 10 }
     },
     scales: {
-      x: {
-        grid: { display: false },
-        ticks: { font: { weight: 'bold', size: 11 }, color: '#334155' }
-      },
-      y: {
-        type: 'linear',
-        display: false,
-        position: 'left',
-        grid: { display: false },
-        ticks: { display: false }
-      },
-      y1: {
-        type: 'linear',
-        display: false,
-        position: 'right',
-        grid: { drawOnChartArea: false },
-        ticks: { display: false }
-      },
+      x: { grid: { display: false }, ticks: { font: { weight: 'bold', size: 11 }, color: '#334155' } },
+      y: { type: 'linear', display: false, position: 'left', grid: { display: false }, ticks: { display: false } },
+      y1: { type: 'linear', display: false, position: 'right', grid: { drawOnChartArea: false }, ticks: { display: false } },
     }
   };
 
@@ -605,7 +597,6 @@ export default function BmiMonitoring() {
           </div>
         </div>
         <div className="flex items-center gap-2.5">
-          {/* Tombol Direct ke Link Form BMI */}
           <a 
             href="https://lensa-qualityinsight.netlify.app/bmi-form" 
             target="_blank" 
@@ -626,59 +617,89 @@ export default function BmiMonitoring() {
         </div>
       </div>
 
-      {/* Bar Filter Paling Atas (Tepat di bawah header) */}
-      <div className="bg-gradient-to-tr from-slate-300 via-slate-200 to-slate-400 p-6 rounded-3xl shadow-md border border-slate-400/80 space-y-4">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="w-full md:w-1/4">
+      {/* Bar Filter Single Line (Cascading & Multiple Select) */}
+      <div className="bg-gradient-to-tr from-slate-300 via-slate-200 to-slate-400 p-4 sm:p-5 rounded-3xl shadow-md border border-slate-400/80">
+        <div className="flex flex-col xl:flex-row items-center gap-2.5">
+          <div className="w-full xl:w-52 shrink-0">
             <input 
               type="text" 
-              placeholder="Cari NIK, Nama, atau Unit..." 
+              placeholder="Cari NIK, Nama, Unit..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-3 bg-white border border-slate-300 rounded-2xl text-xs font-bold text-slate-800 focus:border-indigo-600 outline-none shadow-inner"
+              className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-2xl text-[11px] font-bold text-slate-800 focus:border-indigo-600 outline-none shadow-inner"
             />
           </div>
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <ModernCombobox label="Semua Periode" value={selectedPeriode} onChange={setSelectedPeriode} options={availablePeriods} />
-            <ModernCombobox label="Semua Region" value={selectedRegion} onChange={setSelectedRegion} options={availableRegions} />
-            <ModernCombobox label="Semua Cluster" value={selectedCluster} onChange={setSelectedCluster} options={availableClusters} />
-            <ModernCombobox label="Semua Job" value={selectedJob} onChange={setSelectedJob} options={availableJobs} />
-            <ModernCombobox label="Semua Status Gizi" value={selectedKategori} onChange={setSelectedKategori} options={availableKategori} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:flex xl:flex-row items-center gap-2 w-full">
+            <MultiSelectDropdown label="Periode" values={selectedPeriodes} onChange={setSelectedPeriodes} options={allPeriods} />
+            <MultiSelectDropdown label="Region" values={selectedRegions} onChange={setSelectedRegions} options={allRegions} />
+            <MultiSelectDropdown label="Cluster" values={selectedClusters} onChange={setSelectedClusters} options={allClusters} />
+            <MultiSelectDropdown label="Mitra" values={selectedMitras} onChange={setSelectedMitras} options={allMitras} />
+            <MultiSelectDropdown label="Job" values={selectedJobs} onChange={setSelectedJobs} options={allJobs} />
+            <MultiSelectDropdown label="Status Gizi" values={selectedKategoris} onChange={setSelectedKategoris} options={allKategori} />
           </div>
         </div>
       </div>
 
-      {/* Kartu Statistik */}
+      {/* Kartu Statistik dengan Ilustrasi Siluet Tubuh Manusia */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 p-5 rounded-3xl border border-slate-400 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:border-slate-500 cursor-pointer space-y-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 block">Total Pengukuran</span>
-          <h4 className="text-2xl font-black text-slate-950">{totalSubmissions}</h4>
-          <p className="text-[10px] text-slate-700 font-bold">Data masuk terekam</p>
+        <div className="bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 p-5 rounded-3xl border border-slate-400 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:border-slate-500 cursor-pointer flex items-center justify-between">
+          <div className="space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 block">Total Pengukuran</span>
+            <h4 className="text-2xl font-black text-slate-950">{totalSubmissions}</h4>
+            <p className="text-[10px] text-slate-700 font-bold">Data masuk terekam</p>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-white/80 border border-slate-300 flex items-center justify-center text-slate-800 shadow-inner">
+            <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24">
+              <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+            </svg>
+          </div>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-300 via-emerald-200 to-emerald-400 p-5 rounded-3xl border border-emerald-500 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:border-emerald-600 cursor-pointer space-y-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-950 block">Normal / Ideal</span>
-          <h4 className="text-2xl font-black text-emerald-950">{idealCount}</h4>
-          <p className="text-[10px] text-emerald-900 font-black">BMI 18.5 - 24.9</p>
+        <div className="bg-gradient-to-br from-emerald-300 via-emerald-200 to-emerald-400 p-5 rounded-3xl border border-emerald-500 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:border-emerald-600 cursor-pointer flex items-center justify-between">
+          <div className="space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-950 block">Normal / Ideal</span>
+            <h4 className="text-2xl font-black text-emerald-950">{idealCount}</h4>
+            <p className="text-[10px] text-emerald-900 font-black">BMI 18.5 - 24.9</p>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-white/80 border border-emerald-400 flex items-center justify-center text-emerald-700 shadow-inner">
+            <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24">
+              <circle cx="12" cy="4" r="2.5"/>
+              <path d="M12 8c-2 0-4 1-4 3v3h2v7h2v-5h2v5h2v-7h2v-3c0-2-2-3-4-3z"/>
+            </svg>
+          </div>
         </div>
 
-        <div className="bg-gradient-to-br from-rose-300 via-rose-200 to-rose-400 p-5 rounded-3xl border border-rose-500 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:border-rose-600 cursor-pointer space-y-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-rose-950 block">Overweight / Obesitas</span>
-          <h4 className="text-2xl font-black text-rose-950">{overweightCount}</h4>
-          <p className="text-[10px] text-rose-900 font-black">BMI &gt; 25.0</p>
+        <div className="bg-gradient-to-br from-rose-300 via-rose-200 to-rose-400 p-5 rounded-3xl border border-rose-500 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:border-rose-600 cursor-pointer flex items-center justify-between">
+          <div className="space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-rose-950 block">Overweight / Obesitas</span>
+            <h4 className="text-2xl font-black text-rose-950">{overweightCount}</h4>
+            <p className="text-[10px] text-rose-900 font-black">BMI &gt; 25.0</p>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-white/80 border border-rose-400 flex items-center justify-center text-rose-700 shadow-inner">
+            <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24">
+              <circle cx="12" cy="4" r="2.5"/>
+              <path d="M12 8c-3 0-6 1.5-6 4.5v2.5h2.5v6h2.5v-4.5h2v4.5h2.5v-6H18V12.5C18 9.5 15 8 12 8z"/>
+            </svg>
+          </div>
         </div>
 
-        <div className="bg-gradient-to-br from-amber-300 via-amber-200 to-amber-400 p-5 rounded-3xl border border-amber-500 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:border-amber-600 cursor-pointer space-y-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-amber-950 block">Underweight</span>
-          <h4 className="text-2xl font-black text-amber-950">{underweightCount}</h4>
-          <p className="text-[10px] text-amber-900 font-black">BMI &lt; 18.5</p>
+        <div className="bg-gradient-to-br from-amber-300 via-amber-200 to-amber-400 p-5 rounded-3xl border border-amber-500 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:border-amber-600 cursor-pointer flex items-center justify-between">
+          <div className="space-y-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-950 block">Underweight</span>
+            <h4 className="text-2xl font-black text-amber-950">{underweightCount}</h4>
+            <p className="text-[10px] text-amber-900 font-black">BMI &lt; 18.5</p>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-white/80 border border-amber-400 flex items-center justify-center text-amber-700 shadow-inner">
+            <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24">
+              <circle cx="12" cy="4" r="2"/>
+              <path d="M12 7c-1.2 0-2.5.8-2.5 2.5v4h1.5v7.5h2V13.5h1.5v-4C14.5 7.8 13.2 7 12 7z"/>
+            </svg>
+          </div>
         </div>
       </div>
 
-      {/* 3 Chart Visualisasi Data: Regional, Job, & Tren Waktu Pengukuran (Monthly Trend) */}
+      {/* Chart Visualisasi Data */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Chart 1: Regional */}
         <div className="bg-gradient-to-br from-cyan-50/80 via-white to-sky-50/80 p-6 rounded-3xl border border-cyan-200 shadow-sm space-y-3 flex flex-col justify-between">
           <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
             <i className="fa-solid fa-map-location-dot text-cyan-600"></i>
@@ -689,7 +710,6 @@ export default function BmiMonitoring() {
           </div>
         </div>
 
-        {/* Chart 2: Job */}
         <div className="bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/80 p-6 rounded-3xl border border-emerald-200 shadow-sm space-y-3 flex flex-col justify-between">
           <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
             <i className="fa-solid fa-briefcase text-emerald-600"></i>
@@ -700,7 +720,6 @@ export default function BmiMonitoring() {
           </div>
         </div>
 
-        {/* Chart 3: Tren Waktu Pengukuran (Monthly Trend Line Chart) */}
         <div className="bg-gradient-to-br from-violet-50/80 via-white to-fuchsia-50/80 p-6 rounded-3xl border border-violet-200 shadow-sm space-y-3 flex flex-col justify-between">
           <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
             <i className="fa-solid fa-chart-line text-violet-600"></i>
@@ -710,7 +729,6 @@ export default function BmiMonitoring() {
             <Line data={generateMonthlyTrendData()} options={lineChartOptions} />
           </div>
         </div>
-
       </div>
 
       {/* Tabel Utama Riwayat BMI */}
@@ -731,96 +749,25 @@ export default function BmiMonitoring() {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 text-white text-[10px] font-black uppercase tracking-wider">
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('tanggal')}>
-                  <div className="flex items-center justify-between gap-1">
-                    <span>Tanggal</span>
-                    <span className="flex flex-col text-[8px] leading-[8px] text-slate-300">
-                      <i className={`fa-solid fa-caret-up ${sortField === 'tanggal' && sortDirection === 'asc' ? 'text-white' : 'opacity-40'}`}></i>
-                      <i className={`fa-solid fa-caret-down ${sortField === 'tanggal' && sortDirection === 'desc' ? 'text-white' : 'opacity-40'}`}></i>
-                    </span>
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('region')}>
-                  <div className="flex items-center justify-between gap-1">
-                    <span>Region / Cluster</span>
-                    <span className="flex flex-col text-[8px] leading-[8px] text-slate-300">
-                      <i className={`fa-solid fa-caret-up ${sortField === 'region' && sortDirection === 'asc' ? 'text-white' : 'opacity-40'}`}></i>
-                      <i className={`fa-solid fa-caret-down ${sortField === 'region' && sortDirection === 'desc' ? 'text-white' : 'opacity-40'}`}></i>
-                    </span>
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('unit_name')}>
-                  <div className="flex items-center justify-between gap-1">
-                    <span>Unit Name</span>
-                    <span className="flex flex-col text-[8px] leading-[8px] text-slate-300">
-                      <i className={`fa-solid fa-caret-up ${sortField === 'unit_name' && sortDirection === 'asc' ? 'text-white' : 'opacity-40'}`}></i>
-                      <i className={`fa-solid fa-caret-down ${sortField === 'unit_name' && sortDirection === 'desc' ? 'text-white' : 'opacity-40'}`}></i>
-                    </span>
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('nik_csr')}>
-                  <div className="flex items-center justify-between gap-1">
-                    <span>NIK SIAD</span>
-                    <span className="flex flex-col text-[8px] leading-[8px] text-slate-300">
-                      <i className={`fa-solid fa-caret-up ${sortField === 'nik_csr' && sortDirection === 'asc' ? 'text-white' : 'opacity-40'}`}></i>
-                      <i className={`fa-solid fa-caret-down ${sortField === 'nik_csr' && sortDirection === 'desc' ? 'text-white' : 'opacity-40'}`}></i>
-                    </span>
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('nama_csr')}>
-                  <div className="flex items-center justify-between gap-1">
-                    <span>Nama CSR</span>
-                    <span className="flex flex-col text-[8px] leading-[8px] text-slate-300">
-                      <i className={`fa-solid fa-caret-up ${sortField === 'nama_csr' && sortDirection === 'asc' ? 'text-white' : 'opacity-40'}`}></i>
-                      <i className={`fa-solid fa-caret-down ${sortField === 'nama_csr' && sortDirection === 'desc' ? 'text-white' : 'opacity-40'}`}></i>
-                    </span>
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('tinggi_badan')}>
-                  <div className="flex items-center justify-center gap-1">
-                    <span>Tinggi (cm)</span>
-                    <span className="flex flex-col text-[8px] leading-[8px] text-slate-300">
-                      <i className={`fa-solid fa-caret-up ${sortField === 'tinggi_badan' && sortDirection === 'asc' ? 'text-white' : 'opacity-40'}`}></i>
-                      <i className={`fa-solid fa-caret-down ${sortField === 'tinggi_badan' && sortDirection === 'desc' ? 'text-white' : 'opacity-40'}`}></i>
-                    </span>
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('berat_badan')}>
-                  <div className="flex items-center justify-center gap-1">
-                    <span>Berat (kg)</span>
-                    <span className="flex flex-col text-[8px] leading-[8px] text-slate-300">
-                      <i className={`fa-solid fa-caret-up ${sortField === 'berat_badan' && sortDirection === 'asc' ? 'text-white' : 'opacity-40'}`}></i>
-                      <i className={`fa-solid fa-caret-down ${sortField === 'berat_badan' && sortDirection === 'desc' ? 'text-white' : 'opacity-40'}`}></i>
-                    </span>
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('nilai_bmi')}>
-                  <div className="flex items-center justify-center gap-1">
-                    <span>BMI</span>
-                    <span className="flex flex-col text-[8px] leading-[8px] text-slate-300">
-                      <i className={`fa-solid fa-caret-up ${sortField === 'nilai_bmi' && sortDirection === 'asc' ? 'text-white' : 'opacity-40'}`}></i>
-                      <i className={`fa-solid fa-caret-down ${sortField === 'nilai_bmi' && sortDirection === 'desc' ? 'text-white' : 'opacity-40'}`}></i>
-                    </span>
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('kategori')}>
-                  <div className="flex items-center justify-between gap-1">
-                    <span>Kategori Gizi</span>
-                    <span className="flex flex-col text-[8px] leading-[8px] text-slate-300">
-                      <i className={`fa-solid fa-caret-up ${sortField === 'kategori' && sortDirection === 'asc' ? 'text-white' : 'opacity-40'}`}></i>
-                      <i className={`fa-solid fa-caret-down ${sortField === 'kategori' && sortDirection === 'desc' ? 'text-white' : 'opacity-40'}`}></i>
-                    </span>
-                  </div>
-                </th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('tanggal')}>Tanggal</th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('region')}>Region / Cluster</th>
+                <th className="py-3.5 px-4">Mitra</th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('unit_name')}>Unit Name</th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('nik_csr')}>NIK SIAD</th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('nama_csr')}>Nama CSR</th>
+                <th className="py-3.5 px-4 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('tinggi_badan')}>Tinggi (cm)</th>
+                <th className="py-3.5 px-4 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('berat_badan')}>Berat (kg)</th>
+                <th className="py-3.5 px-4 text-center cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('nilai_bmi')}>BMI</th>
+                <th className="py-3.5 px-4 cursor-pointer hover:bg-slate-700 transition" onClick={() => handleSort('kategori')}>Kategori Gizi</th>
                 <th className="py-3.5 px-4 text-center">Eviden</th>
                 <th className="py-3.5 px-4 text-center">Action</th>
               </tr>
             </thead>
             <tbody ref={tableBodyRef} className="divide-y divide-slate-200 bg-white">
               {loading ? (
-                <tr><td colSpan="11" className="py-8 text-center text-slate-400 italic">Memuat data...</td></tr>
+                <tr><td colSpan="12" className="py-8 text-center text-slate-400 italic">Memuat data...</td></tr>
               ) : currentRows.length === 0 ? (
-                <tr><td colSpan="11" className="py-8 text-center text-slate-400 italic">Tidak ada data BMI ditemukan.</td></tr>
+                <tr><td colSpan="12" className="py-8 text-center text-slate-400 italic">Tidak ada data BMI ditemukan.</td></tr>
               ) : (
                 currentRows.map((item) => {
                   const kat = String(item.kategori || '');
@@ -830,7 +777,8 @@ export default function BmiMonitoring() {
                   return (
                     <tr key={item.id || item.nik_csr} className="hover:bg-slate-100/80 transition duration-200">
                       <td className="py-3 px-4 font-medium text-slate-600">{item.tanggal}</td>
-                      <td className="py-3 px-4 font-bold text-slate-800">{item.region} / {item.cluster || '-'}</td>
+                      <td className="py-3 px-4 font-bold text-slate-800">{getRecordRegion(item)} / {getRecordCluster(item) || '-'}</td>
+                      <td className="py-3 px-4 font-semibold text-slate-700">{getRecordMitra(item)}</td>
                       <td className="py-3 px-4 font-medium text-slate-700">{item.unit_name}</td>
                       <td className="py-3 px-4 font-bold text-slate-900">{item.nik_csr}</td>
                       <td className="py-3 px-4 font-bold text-slate-900">{item.nama_csr}</td>
@@ -892,7 +840,7 @@ export default function BmiMonitoring() {
         <div className="flex items-center justify-between">
           <div>
             <h4 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <i className="fa-solid fa-user-clock text-amber-600"></i> List T-Fronters Belum Submit BMI {selectedPeriode ? `(${selectedPeriode})` : ''}
+              <i className="fa-solid fa-user-clock text-amber-600"></i> List T-Fronters Belum Submit BMI
             </h4>
             <p className="text-[11px] text-slate-500 mt-0.5">Daftar CSR yang belum melakukan pengisian laporan BMI mengacu pada database CSR.</p>
           </div>
@@ -916,6 +864,7 @@ export default function BmiMonitoring() {
               <tr className="bg-gradient-to-r from-amber-900 via-amber-800 to-amber-700 text-white text-[10px] font-black uppercase tracking-wider">
                 <th className="py-3.5 px-4">Region</th>
                 <th className="py-3.5 px-4">Cluster</th>
+                <th className="py-3.5 px-4">Mitra</th>
                 <th className="py-3.5 px-4">Unit Name</th>
                 <th className="py-3.5 px-4">NIK</th>
                 <th className="py-3.5 px-4">Nama CSR</th>
@@ -925,18 +874,19 @@ export default function BmiMonitoring() {
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
               {loading ? (
-                <tr><td colSpan="7" className="py-6 text-center text-slate-400 italic">Memuat data...</td></tr>
+                <tr><td colSpan="8" className="py-6 text-center text-slate-400 italic">Memuat data...</td></tr>
               ) : currentUnsubRows.length === 0 ? (
-                <tr><td colSpan="7" className="py-6 text-center text-slate-400 italic">Semua T-Fronters sudah melakukan submit!</td></tr>
+                <tr><td colSpan="8" className="py-6 text-center text-slate-400 italic">Semua T-Fronters sudah melakukan submit!</td></tr>
               ) : (
                 currentUnsubRows.map((csr, idx) => (
                   <tr key={csr.id || idx} className="hover:bg-amber-50/50 transition duration-200">
-                    <td className="py-3 px-4 font-bold text-slate-700">{csr.region || '-'}</td>
-                    <td className="py-3 px-4 font-semibold text-slate-700">{csr.cluster || '-'}</td>
+                    <td className="py-3 px-4 font-bold text-slate-700">{getRecordRegion(csr) || '-'}</td>
+                    <td className="py-3 px-4 font-semibold text-slate-700">{getRecordCluster(csr) || '-'}</td>
+                    <td className="py-3 px-4 font-semibold text-slate-700">{getRecordMitra(csr) || '-'}</td>
                     <td className="py-3 px-4 font-semibold text-slate-700">{csr.unitName || csr.unit_name || '-'}</td>
                     <td className="py-3 px-4 font-bold text-slate-900">{csr.nik || csr.nik_csr || '-'}</td>
                     <td className="py-3 px-4 font-extrabold text-slate-900">{csr.nama || csr.nama_csr || '-'}</td>
-                    <td className="py-3 px-4 font-semibold text-slate-600">{csr.job || '-'}</td>
+                    <td className="py-3 px-4 font-semibold text-slate-600">{getRecordJob(csr) || '-'}</td>
                     <td className="py-3 px-4 text-center">
                       <span className="px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-[10px]">Belum Submit</span>
                     </td>
@@ -993,6 +943,7 @@ export default function BmiMonitoring() {
             <thead>
               <tr className="bg-gradient-to-r from-rose-950 via-rose-900 to-rose-800 text-white text-[10px] font-black uppercase tracking-wider">
                 <th className="py-3.5 px-4">Region / Cluster</th>
+                <th className="py-3.5 px-4">Mitra</th>
                 <th className="py-3.5 px-4">Unit Name</th>
                 <th className="py-3.5 px-4">NIK</th>
                 <th className="py-3.5 px-4">Nama CSR</th>
@@ -1003,13 +954,14 @@ export default function BmiMonitoring() {
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
               {loading ? (
-                <tr><td colSpan="7" className="py-6 text-center text-slate-400 italic">Memuat data...</td></tr>
+                <tr><td colSpan="8" className="py-6 text-center text-slate-400 italic">Memuat data...</td></tr>
               ) : currentStreakRows.length === 0 ? (
-                <tr><td colSpan="7" className="py-6 text-center text-slate-400 italic">Tidak ada CSR yang mengalami status tidak ideal 3 bulan berturut-turut.</td></tr>
+                <tr><td colSpan="8" className="py-6 text-center text-slate-400 italic">Tidak ada CSR yang mengalami status tidak ideal 3 bulan berturut-turut.</td></tr>
               ) : (
                 currentStreakRows.map((item, idx) => (
                   <tr key={idx} className="hover:bg-rose-50/50 transition duration-200">
                     <td className="py-3 px-4 font-bold text-slate-800">{item.region} / {item.cluster || '-'}</td>
+                    <td className="py-3 px-4 font-semibold text-slate-700">{item.mitra}</td>
                     <td className="py-3 px-4 font-medium text-slate-700">{item.unit_name}</td>
                     <td className="py-3 px-4 font-bold text-slate-900">{item.nik_csr}</td>
                     <td className="py-3 px-4 font-extrabold text-slate-900">{item.nama_csr}</td>

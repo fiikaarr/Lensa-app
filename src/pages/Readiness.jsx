@@ -417,8 +417,8 @@ export default function Readiness() {
       checkedVals = [0];
     }
 
-    let palette = ['#E11D48', '#F59E0B', '#8B5CF6', '#06B6D4', '#C2410C', '#A21CAF', '#4338CA'];
-    let colors = regLabels.map((_, i) => palette[i % palette.length]);
+    // Mengubah warna batang Total Unit agar semuanya merah seragam seperti Kalimantan
+    let colors = regLabels.map(() => '#E11D48');
 
     let ctx = regionalChartRef.current.getContext('2d');
     let emeraldGrad = ctx.createLinearGradient(0, 0, 0, 300);
@@ -493,7 +493,10 @@ export default function Readiness() {
       showReadinessToast("Informasi", "Tidak ada unit yang belum ceklis untuk di-download.", "warning");
       return;
     }
-    let dataToExport = unportedUnitsList.map((u, i) => ({ "No": i + 1, "Unit Belum Ceklis": u }));
+    let dataToExport = unportedUnitsList.map((u, i) => {
+      let displayName = u.toLowerCase().startsWith('grapari') ? u : `GraPARI ${u}`;
+      return { "No": i + 1, "Unit Belum Ceklis": displayName };
+    });
     let worksheet = XLSX.utils.json_to_sheet(dataToExport);
     let workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Belum Ceklis");
@@ -818,9 +821,12 @@ export default function Readiness() {
             {unportedUnitsList.length === 0 ? (
               <div className="p-3 bg-white rounded-xl text-center text-[10px] text-slate-500 italic">✅ Semua unit sudah ceklis hari ini!</div>
             ) : (
-              unportedUnitsList.map((unitName, idx) => (
-                <div key={idx} className="px-3 py-1.5 bg-white border border-rose-100 rounded-lg text-[10px] font-bold text-rose-700 shadow-sm">{unitName}</div>
-              ))
+              unportedUnitsList.map((unitName, idx) => {
+                const displayName = unitName.toLowerCase().startsWith('grapari') ? unitName : `GraPARI ${unitName}`;
+                return (
+                  <div key={idx} className="px-3 py-1.5 bg-white border border-rose-100 rounded-lg text-[10px] font-bold text-rose-700 shadow-sm">{displayName}</div>
+                );
+              })
             )}
           </div>
         </div>

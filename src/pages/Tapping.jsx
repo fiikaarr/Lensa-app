@@ -3,8 +3,6 @@ import ReactDOM from 'react-dom';
 import { supabase } from '../supabase';
 import Chart from 'chart.js/auto';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 
 Chart.register(ChartDataLabels);
 
@@ -41,11 +39,20 @@ export default function Tapping() {
     subParams: {}, top5Sub: [], bottom5Sub: [], coachingList: [], topCSRs: []
   });
 
+  // State Tabel 1 (Daftar Prioritas)
   const [currentTab, setCurrentTab] = useState('Knowledge');
   const [currentSort, setSort] = useState('asc');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
+
+  // State Tabel 2 (Perbandingan 3 Bulan Terakhir)
+  const [threeMonthData, setThreeMonthData] = useState([]);
+  const [monthLabels, setMonthLabels] = useState(['Bulan 1', 'Bulan 2', 'Bulan 3']);
+  const [search3M, setSearch3M] = useState('');
+  const [sort3M, setSort3M] = useState('asc');
+  const [page3M, setPage3M] = useState(1);
+  const rowsPerPage3M = 15;
 
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedDetailRecord, setSelectedDetailRecord] = useState(null);
@@ -77,23 +84,57 @@ export default function Tapping() {
   const bottom5SubInst = useRef(null);
   const subParamsInst = useRef(null);
 
-  const exportContainerRef = useRef(null);
-
   useEffect(() => {
     loadInitialData();
   }, []);
 
+  // Cascading Dropdown: Regional -> Cluster -> Unit
+  useEffect(() => {
+    if (globalCsrDb.length > 0) {
+      const regs = [...new Set(globalCsrDb.map(c => c.regional || c.region).filter(Boolean))].sort();
+      setRegionalsList(regs);
+    }
+  }, [globalCsrDb]);
+
+  useEffect(() => {
+    let filtered = globalCsrDb;
+    if (selectedRegional !== 'ALL') {
+      filtered = filtered.filter(c => (c.regional || c.region) === selectedRegional);
+    }
+    const cls = [...new Set(filtered.map(c => c.cluster || c.cluster_name).filter(Boolean))].sort();
+    setClustersList(cls);
+    if (selectedCluster !== 'ALL' && !cls.includes(selectedCluster)) {
+      setSelectedCluster('ALL');
+      setSelectedUnit('ALL');
+    }
+  }, [selectedRegional, globalCsrDb]);
+
+  useEffect(() => {
+    let filtered = globalCsrDb;
+    if (selectedRegional !== 'ALL') {
+      filtered = filtered.filter(c => (c.regional || c.region) === selectedRegional);
+    }
+    if (selectedCluster !== 'ALL') {
+      filtered = filtered.filter(c => (c.cluster || c.cluster_name) === selectedCluster);
+    }
+    const unts = [...new Set(filtered.map(c => c.unitName || c.unit_name).filter(Boolean))].sort();
+    setUnitsList(unts);
+    if (selectedUnit !== 'ALL' && !unts.includes(selectedUnit)) {
+      setSelectedUnit('ALL');
+    }
+  }, [selectedRegional, selectedCluster, globalCsrDb]);
+
+  // Load Data Utama & 3 Bulan Terakhir setiap filter berubah
   useEffect(() => {
     if (globalCsrDb.length > 0) {
       loadTappingData();
+      loadThreeMonthComparison();
     }
   }, [startDate, endDate, selectedRegional, selectedCluster, selectedUnit, globalCsrDb]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [currentTab, currentSort, searchQuery]);
+  useEffect(() => { setCurrentPage(1); }, [currentTab, currentSort, searchQuery]);
+  useEffect(() => { setPage3M(1); }, [search3M, sort3M]);
 
-  // Fungsi helper untuk mengambil SEMUA baris dari tabel tanpa batas 1000 baris
   const fetchAllFromTable = async (tableName) => {
     let allData = [];
     let limit = 1000;
@@ -102,24 +143,15 @@ export default function Tapping() {
     let keepFetching = true;
 
     while (keepFetching) {
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .range(from, to);
-
+      const { data, error } = await supabase.from(tableName).select('*').range(from, to);
       if (error) {
         console.error(`Gagal mengambil data dari ${tableName}:`, error);
         break;
       }
-
       if (data && data.length > 0) {
         allData = allData.concat(data);
-        if (data.length < limit) {
-          keepFetching = false;
-        } else {
-          from += limit;
-          to += limit;
-        }
+        if (data.length < limit) keepFetching = false;
+        else { from += limit; to += limit; }
       } else {
         keepFetching = false;
       }
@@ -136,31 +168,63 @@ export default function Tapping() {
     }
   };
 
-  const loadTappingData = async () => {
+  // --- Penarikan Data Tabel Perbandingan 3 Bulan Terakhir (Tunduk pada Filter Regional, Cluster, Unit) ---
+  const loadThreeMonthComparison = async () => {
     try {
-      let query = supabase.from('nilai_tapping').select('*');
+      const d = new Date();
+      const m3Date = new Date(d.getFullYear(), d.getMonth(), 1); 
+      const m2Date = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+      const m1Date = new Date(d.getFullYear(), d.getMonth() - 2, 1);
+      
+      const toYMD = (dateObj) => `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+      const formatMonth = (dateObj) => {
+        const m = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+        return `${m[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+      };
+      
+      const m1Str = toYMD(m1Date);
+      const m2Str = toYMD(m2Date);
+      const m3Str = toYMD(m3Date);
+      
+      setMonthLabels([formatMonth(m1Date), formatMonth(m2Date), formatMonth(m3Date)]);
 
-      if (startDate && endDate) {
-        query = query.gte('tanggal_assessor', startDate).lte('tanggal_assessor', endDate);
-      } else if (startDate) {
-        query = query.gte('tanggal_assessor', startDate);
-      } else if (endDate) {
-        query = query.lte('tanggal_assessor', endDate);
-      } else {
-        query = query.limit(1000);
+      const startQ = `${m1Str}-01`;
+
+      let allData = [];
+      let maxRecords = 1500;
+      let fetchLimit = 1000;
+      let from = 0;
+      let keepFetching = true;
+
+      while (keepFetching && allData.length < maxRecords) {
+        let to = from + fetchLimit - 1;
+        if (to >= maxRecords) to = maxRecords - 1;
+
+        const { data, error } = await supabase
+          .from('nilai_tapping')
+          .select('*')
+          .gte('tanggal_assessor', startQ)
+          .range(from, to);
+
+        if (error) {
+          console.error("Gagal load data 3 bulan dari Supabase:", error);
+          break;
+        }
+
+        if (data && data.length > 0) {
+          allData = allData.concat(data);
+          if (data.length < (to - from + 1)) keepFetching = false;
+          else from = to + 1;
+        } else {
+          keepFetching = false;
+        }
       }
 
-      let { data: tapData, error: tapErr } = await query;
-      if (tapErr) throw tapErr;
-
-      const rawData = tapData || [];
-
-      // Buat lookup map dari database_csr berdasarkan NIK (trim)
-      const csrMap = {};
+      const globalCsrMap = {};
       globalCsrDb.forEach(c => {
         const cNik = String(c.nik || c.nik_csr || '').trim();
         if (cNik) {
-          csrMap[cNik] = {
+          globalCsrMap[cNik] = {
             regional: c.regional || c.region || '',
             cluster: c.cluster || c.cluster_name || '',
             unitName: c.unitName || c.unit_name || ''
@@ -168,7 +232,114 @@ export default function Tapping() {
         }
       });
 
-      // Gabungkan data tapping dengan lookup database_csr
+      const enriched3M = allData.map(row => {
+        const nik = String(row.nik || row.nik_csr || '').trim();
+        const info = globalCsrMap[nik] || {};
+        return {
+          ...row,
+          lookup_regional: row.regional || info.regional || 'Unknown',
+          lookup_cluster: row.cluster || info.cluster || 'Unknown',
+          lookup_unit: row.unit_name || info.unitName || 'Unknown'
+        };
+      });
+
+      const filtered3MData = enriched3M.filter(d => {
+        if (selectedRegional !== 'ALL' && d.lookup_regional !== selectedRegional) return false;
+        if (selectedCluster !== 'ALL' && d.lookup_cluster !== selectedCluster) return false;
+        if (selectedUnit !== 'ALL' && d.lookup_unit !== selectedUnit) return false;
+        return true;
+      });
+
+      const csrMapGroup = {};
+      filtered3MData.forEach(row => {
+        const nik = String(row.nik || row.nik_csr || '').trim();
+        if (!nik) return;
+        
+        let dbUnit = row.lookup_unit;
+        let nama = row.nama || row.nama_csr || 'Unknown';
+
+        if (!csrMapGroup[nik]) {
+          csrMapGroup[nik] = { nama: nama, unit: dbUnit, [m1Str]: [], [m2Str]: [], [m3Str]: [] };
+        }
+        
+        const tgl = (row.tanggal_assessor || '').substring(0, 7);
+        if (csrMapGroup[nik][tgl]) {
+          csrMapGroup[nik][tgl].push(Number(row.total_nilai) || 0);
+        }
+      });
+
+      const getAvg = (arr) => arr.length > 0 ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : '-';
+
+      const comparisonList = [];
+      Object.keys(csrMapGroup).forEach(nik => {
+        const obj = csrMapGroup[nik];
+        comparisonList.push({
+          nik,
+          nama: obj.nama,
+          unit: obj.unit,
+          avg1: getAvg(obj[m1Str]),
+          avg2: getAvg(obj[m2Str]),
+          avg3: getAvg(obj[m3Str])
+        });
+      });
+
+      setThreeMonthData(comparisonList);
+    } catch (err) {
+      console.error("Gagal memproses data 3 bulan:", err);
+    }
+  };
+
+  // --- Penarikan Data Utama Dashboard ---
+  const loadTappingData = async () => {
+    try {
+      let allRawData = [];
+      let maxRecords = 1500;
+      let fetchLimit = 1000;
+      let from = 0;
+      let keepFetching = true;
+
+      while (keepFetching && allRawData.length < maxRecords) {
+        let to = from + fetchLimit - 1;
+        if (to >= maxRecords) to = maxRecords - 1;
+
+        let query = supabase.from('nilai_tapping').select('*').range(from, to);
+
+        if (startDate && endDate) {
+          query = query.gte('tanggal_assessor', startDate).lte('tanggal_assessor', endDate);
+        } else if (startDate) {
+          query = query.gte('tanggal_assessor', startDate);
+        } else if (endDate) {
+          query = query.lte('tanggal_assessor', endDate);
+        }
+
+        let { data: tapData, error: tapErr } = await query;
+        if (tapErr) {
+          console.error("Gagal load data tapping utama dari Supabase:", tapErr);
+          break;
+        }
+
+        if (tapData && tapData.length > 0) {
+          allRawData = allRawData.concat(tapData);
+          if (tapData.length < (to - from + 1)) {
+            keepFetching = false;
+          } else {
+            from = to + 1;
+          }
+        } else {
+          keepFetching = false;
+        }
+      }
+
+      const rawData = allRawData || [];
+
+      const csrMap = {};
+      globalCsrDb.forEach(c => {
+        const cNik = String(c.nik || c.nik_csr || '').trim();
+        if (cNik) {
+          csrMap[cNik] = { regional: c.regional || c.region || '', cluster: c.cluster || c.cluster_name || '', unitName: c.unitName || c.unit_name || '' };
+        }
+      });
+
       const enrichedTappingData = rawData.map(d => {
         const dNik = String(d.nik || d.nik_csr || '').trim();
         const csrInfo = csrMap[dNik] || {};
@@ -180,25 +351,6 @@ export default function Tapping() {
         };
       });
 
-      // Update dropdown options berdasarkan data CSR & Tapping
-      const allRegionals = [...new Set(Object.values(csrMap).map(c => c.regional).concat(rawData.map(d => d.regional)).filter(Boolean))].sort();
-      setRegionalsList(allRegionals);
-
-      let filteredCsrForCluster = globalCsrDb;
-      if (selectedRegional !== 'ALL') {
-        filteredCsrForCluster = globalCsrDb.filter(c => (c.regional || c.region) === selectedRegional);
-      }
-      const allClusters = [...new Set(filteredCsrForCluster.map(c => c.cluster || c.cluster_name).filter(Boolean))].sort();
-      setClustersList(allClusters);
-
-      let filteredCsrForUnit = filteredCsrForCluster;
-      if (selectedCluster !== 'ALL') {
-        filteredCsrForUnit = filteredCsrForCluster.filter(c => (c.cluster || c.cluster_name) === selectedCluster);
-      }
-      const allUnits = [...new Set(filteredCsrForUnit.map(c => c.unitName || c.unit_name).concat(rawData.map(d => d.unit_name)).filter(Boolean))].sort();
-      setUnitsList(allUnits);
-
-      // Filter lanjutan untuk Tapping
       let filteredData = enrichedTappingData.filter(d => {
         let match = true;
         let rawTgl = d.tanggal_assessor || '';
@@ -216,6 +368,11 @@ export default function Tapping() {
     } catch (err) {
       console.error("Gagal load data tapping:", err);
     }
+  };
+
+  const handleRefreshData = () => {
+    loadTappingData();
+    loadThreeMonthComparison();
   };
 
   const buildSummary = (data) => {
@@ -290,8 +447,8 @@ export default function Tapping() {
       coachingList.push({
         id: rowIdCounter++,
         tanggal: tgl,
-        nik: d.nik_csr || '-',
-        nama: d.nama_csr || '-',
+        nik: d.nik || d.nik_csr || '-',
+        nama: d.nama || d.nama_csr || '-',
         unit: d.lookup_unit || '-',
         attitude: nAtt,
         skill: nSkl,
@@ -518,30 +675,7 @@ export default function Tapping() {
     }, 200);
   };
 
-  const exportPDF = async () => {
-    try {
-      const element = exportContainerRef.current;
-      const canvas = await html2canvas(element, { scale: 1.5, useCORS: true, logging: false });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      let heightLeft = pdfHeight;
-      let position = 0;
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-      heightLeft -= pdf.internal.pageSize.getHeight();
-      while (heightLeft >= 0) {
-        position = heightLeft - pdfHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pdf.internal.pageSize.getHeight();
-      }
-      pdf.save(`Service_Quality_Tapping_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
-    } catch (err) {
-      console.error("Gagal export PDF:", err);
-    }
-  };
-
+  // --- Filtering, Sorting, dan Paging untuk Tabel 1 ---
   let filteredCoaching = summaryData.coachingList.filter(row => {
     if (currentTab === 'Knowledge') return row.isUnderKnowledge;
     if (currentTab === 'Attitude') return row.isUnderAttitude;
@@ -562,6 +696,23 @@ export default function Tapping() {
 
   const totalPages = Math.ceil(sortedCoaching.length / rowsPerPage) || 1;
   const paginatedCoaching = sortedCoaching.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+
+  // --- Filtering, Sorting, dan Paging untuk Tabel 2 (3 Bulan Terakhir) ---
+  let filtered3M = threeMonthData.filter(item => {
+    const term = search3M.toLowerCase();
+    return String(item.nik).toLowerCase().includes(term) ||
+           String(item.nama).toLowerCase().includes(term) ||
+           String(item.unit || '').toLowerCase().includes(term);
+  });
+
+  filtered3M.sort((a, b) => {
+    let valA = a.avg3 === '-' ? -1 : Number(a.avg3);
+    let valB = b.avg3 === '-' ? -1 : Number(b.avg3);
+    return sort3M === 'asc' ? valA - valB : valB - valA;
+  });
+
+  const totalPages3M = Math.ceil(filtered3M.length / rowsPerPage3M) || 1;
+  const paginated3M = filtered3M.slice((page3M - 1) * rowsPerPage3M, page3M * rowsPerPage3M);
 
   const renderDetailParameters = (rawData) => {
     if (!rawData) return null;
@@ -656,7 +807,7 @@ export default function Tapping() {
   };
 
   return (
-    <div ref={exportContainerRef} className="space-y-6 font-sans relative animate-[fadeInOut_0.3s_ease-in-out]">
+    <div className="space-y-6 font-sans relative animate-[fadeInOut_0.3s_ease-in-out]">
       
       {/* Header & Filter Bar */}
       <div className="bg-gradient-to-tr from-slate-300 via-slate-200 to-slate-400 p-6 rounded-3xl shadow-md border border-slate-400 space-y-5 relative">
@@ -675,18 +826,14 @@ export default function Tapping() {
               <i className="fa-solid fa-rotate-left text-xs"></i>
               <span>Reset Filter</span>
             </button>
-            <button onClick={loadTappingData} className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-semibold flex items-center space-x-2 border border-slate-300 shadow-sm cursor-pointer">
+            <button onClick={handleRefreshData} className="px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-semibold flex items-center space-x-2 border border-slate-300 shadow-sm cursor-pointer">
               <i className="fa-solid fa-arrows-rotate text-xs"></i>
               <span>Refresh Data</span>
-            </button>
-            <button onClick={exportPDF} className="px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-500 hover:from-red-500 hover:to-rose-400 text-white rounded-2xl text-xs font-bold flex items-center space-x-2 shadow-md shadow-red-600/30 border border-red-400/30 cursor-pointer">
-              <i className="fa-solid fa-file-pdf text-xs"></i>
-              <span>Export PDF Report</span>
             </button>
           </div>
         </div>
 
-        {/* Filter Bar: Mulai Tanggal -> Sampai Tanggal -> Regional -> Cluster -> Unit Name */}
+        {/* Filter Bar: Cascading Regional -> Cluster -> Unit Name */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 pt-4 border-t border-slate-400/70 relative z-40">
           <div>
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Mulai Tanggal</label>
@@ -721,7 +868,7 @@ export default function Tapping() {
             )}
           </div>
 
-          {/* Cluster Dropdown (Lookup dari database_csr) */}
+          {/* Cluster Dropdown (Cascaded by Regional) */}
           <div className="relative">
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Cluster</label>
             <button type="button" onClick={() => { setShowClusterMenu(!showClusterMenu); setShowRegMenu(false); setShowUnitMenu(false); }} className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-400/80 rounded-2xl text-xs font-semibold text-slate-800 text-left flex items-center justify-between shadow-inner cursor-pointer">
@@ -745,7 +892,7 @@ export default function Tapping() {
             )}
           </div>
 
-          {/* Unit Dropdown */}
+          {/* Unit Name Dropdown (Cascaded by Regional & Cluster) */}
           <div className="relative">
             <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Unit Name</label>
             <button type="button" onClick={() => { setShowUnitMenu(!showUnitMenu); setShowRegMenu(false); setShowClusterMenu(false); }} className="w-full pl-9 pr-8 py-2.5 bg-white border border-slate-400/80 rounded-2xl text-xs font-semibold text-slate-800 text-left flex items-center justify-between shadow-inner cursor-pointer">
@@ -947,10 +1094,8 @@ export default function Tapping() {
         </div>
       </div>
 
-      {/* Tabel Coaching & Paging */}
+      {/* Tabel 1: Daftar Prioritas Coaching */}
       <div className="bg-gradient-to-br from-slate-100 via-white to-slate-200 p-6 rounded-3xl border border-slate-300 shadow-sm space-y-5">
-        
-        {/* Header Bar Tabel */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
             <div className="flex items-center space-x-2">
@@ -963,7 +1108,6 @@ export default function Tapping() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* Search Input */}
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                 <i className="fa-solid fa-magnifying-glass text-xs"></i>
@@ -976,60 +1120,21 @@ export default function Tapping() {
                 className="pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-2xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:border-red-600 shadow-sm w-52 transition" 
               />
             </div>
-
-            {/* Filter Pill Buttons */}
             <div className="flex items-center bg-slate-200/80 p-1.5 rounded-2xl border border-slate-300 shadow-inner gap-1">
-              <button 
-                onClick={() => setCurrentTab('Knowledge')} 
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${currentTab === 'Knowledge' ? 'bg-red-600 text-white shadow-md' : 'text-slate-700 hover:text-slate-900'}`}
-              >
-                <span>🎯</span>
-                <span>Knowledge Kritis</span>
-              </button>
-              <button 
-                onClick={() => setCurrentTab('Attitude')} 
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${currentTab === 'Attitude' ? 'bg-red-600 text-white shadow-md' : 'text-slate-700 hover:text-slate-900'}`}
-              >
-                <span>❤️</span>
-                <span>Attitude Kritis</span>
-              </button>
-              <button 
-                onClick={() => setCurrentTab('Skill')} 
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${currentTab === 'Skill' ? 'bg-red-600 text-white shadow-md' : 'text-slate-700 hover:text-slate-900'}`}
-              >
-                <span>🧠</span>
-                <span>Skill Kritis</span>
-              </button>
+              <button onClick={() => setCurrentTab('Knowledge')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${currentTab === 'Knowledge' ? 'bg-red-600 text-white shadow-md' : 'text-slate-700 hover:text-slate-900'}`}><span>🎯</span><span>Knowledge Kritis</span></button>
+              <button onClick={() => setCurrentTab('Attitude')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${currentTab === 'Attitude' ? 'bg-red-600 text-white shadow-md' : 'text-slate-700 hover:text-slate-900'}`}><span>❤️</span><span>Attitude Kritis</span></button>
+              <button onClick={() => setCurrentTab('Skill')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${currentTab === 'Skill' ? 'bg-red-600 text-white shadow-md' : 'text-slate-700 hover:text-slate-900'}`}><span>🧠</span><span>Skill Kritis</span></button>
               <div className="w-px h-4 bg-slate-300 mx-0.5"></div>
-              <button 
-                onClick={() => setCurrentTab('All')} 
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${currentTab === 'All' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-700 hover:text-slate-900'}`}
-              >
-                <span>🌟</span>
-                <span>All Data</span>
-              </button>
+              <button onClick={() => setCurrentTab('All')} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${currentTab === 'All' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-700 hover:text-slate-900'}`}><span>🌟</span><span>All Data</span></button>
             </div>
-
-            {/* Sorting Buttons */}
             <div className="flex items-center space-x-1 bg-slate-200/80 px-3 py-1.5 rounded-2xl border border-slate-300 text-xs font-semibold text-slate-700 shadow-inner">
               <span className="text-[11px] font-bold text-slate-500 mr-1">Urutkan:</span>
-              <button 
-                onClick={() => setSort('asc')} 
-                className={`px-2.5 py-1 rounded-xl text-xs transition ${currentSort === 'asc' ? 'bg-red-600 text-white font-bold shadow-sm' : 'hover:text-slate-900'}`}
-              >
-                Terendah dulu
-              </button>
-              <button 
-                onClick={() => setSort('desc')} 
-                className={`px-2.5 py-1 rounded-xl text-xs transition ${currentSort === 'desc' ? 'bg-red-600 text-white font-bold shadow-sm' : 'hover:text-slate-900'}`}
-              >
-                Tertinggi dulu
-              </button>
+              <button onClick={() => setSort('asc')} className={`px-2.5 py-1 rounded-xl text-xs transition ${currentSort === 'asc' ? 'bg-red-600 text-white font-bold shadow-sm' : 'hover:text-slate-900'}`}>Terendah dulu</button>
+              <button onClick={() => setSort('desc')} className={`px-2.5 py-1 rounded-xl text-xs transition ${currentSort === 'desc' ? 'bg-red-600 text-white font-bold shadow-sm' : 'hover:text-slate-900'}`}>Tertinggi dulu</button>
             </div>
           </div>
         </div>
 
-        {/* Tabel dengan Header Gradasi Biru Navy Kontras Tinggi */}
         <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -1075,26 +1180,92 @@ export default function Tapping() {
           </table>
         </div>
 
-        {/* Paging Footer */}
         <div className="flex flex-col sm:flex-row items-center justify-between pt-2 gap-3">
-          <p className="text-xs text-slate-600 font-medium">
-            Menampilkan halaman {currentPage} dari {totalPages} (Total {sortedCoaching.length} data)
-          </p>
+          <p className="text-xs text-slate-600 font-medium">Menampilkan halaman {currentPage} dari {totalPages} (Total {sortedCoaching.length} data)</p>
           <div className="flex items-center space-x-2">
-            <button 
-              disabled={currentPage <= 1} 
-              onClick={() => setCurrentPage(p => p - 1)} 
-              className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition"
-            >
-              Sebelumnya
-            </button>
-            <button 
-              disabled={currentPage >= totalPages} 
-              onClick={() => setCurrentPage(p => p + 1)} 
-              className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition"
-            >
-              Berikutnya
-            </button>
+            <button disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)} className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition">Sebelumnya</button>
+            <button disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition">Berikutnya</button>
+          </div>
+        </div>
+      </div>
+
+      {/* --- TABEL 2: PERBANDINGAN TREND TOTAL NILAI 3 BULAN TERAKHIR (Dipengaruhi Filter Regional, Cluster, Unit) --- */}
+      <div className="bg-gradient-to-br from-slate-100 via-white to-slate-200 p-6 rounded-3xl border border-slate-300 shadow-sm space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg font-bold shadow-sm">
+              <i className="fa-solid fa-clock-rotate-left"></i>
+            </div>
+            <div>
+              <h3 className="text-base font-black text-slate-900 tracking-tight">Perbandingan Performa CSR (3 Bulan Terakhir)</h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Memantau trend pergerakan rata-rata total nilai QM seluruh CSR per bulan.
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <i className="fa-solid fa-magnifying-glass text-xs"></i>
+              </span>
+              <input 
+                type="text" 
+                value={search3M} 
+                onChange={e => setSearch3M(e.target.value)} 
+                placeholder="Cari SIAD, Nama, Unit..." 
+                className="pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-2xl text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-600 shadow-sm w-52 transition" 
+              />
+            </div>
+            
+            <div className="flex items-center space-x-1 bg-slate-200/80 px-3 py-1.5 rounded-2xl border border-slate-300 text-xs font-semibold text-slate-700 shadow-inner">
+              <span className="text-[11px] font-bold text-slate-500 mr-1">Urutkan (Bulan Terbaru):</span>
+              <button onClick={() => setSort3M('asc')} className={`px-2.5 py-1 rounded-xl text-xs transition ${sort3M === 'asc' ? 'bg-indigo-600 text-white font-bold shadow-sm' : 'hover:text-slate-900'}`}>Terendah</button>
+              <button onClick={() => setSort3M('desc')} className={`px-2.5 py-1 rounded-xl text-xs transition ${sort3M === 'desc' ? 'bg-indigo-600 text-white font-bold shadow-sm' : 'hover:text-slate-900'}`}>Tertinggi</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gradient-to-r from-slate-950 via-indigo-900 to-indigo-600 text-[11px] font-black text-white uppercase tracking-wider shadow-md">
+                <th className="py-3.5 px-4">NIK</th>
+                <th className="py-3.5 px-4">Nama CSR</th>
+                <th className="py-3.5 px-4">Unit / GraPARI</th>
+                <th className="py-3.5 px-4">{monthLabels[0]}</th>
+                <th className="py-3.5 px-4">{monthLabels[1]}</th>
+                <th className="py-3.5 px-4">{monthLabels[2]} (Terbaru)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 text-xs font-medium text-slate-800 bg-white">
+              {paginated3M.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="py-8 text-center text-slate-500 italic">
+                    Data tidak ditemukan berdasarkan filter pencarian.
+                  </td>
+                </tr>
+              ) : (
+                paginated3M.map((row, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50 transition">
+                    <td className="py-3.5 px-4 font-bold text-slate-900">{row.nik}</td>
+                    <td className="py-3.5 px-4 font-bold text-slate-900">{row.nama}</td>
+                    <td className="py-3.5 px-4"><span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-semibold border border-slate-200 shadow-xs">{row.unit}</span></td>
+                    <td className={`py-3.5 px-4 font-black ${row.avg1 === '-' ? 'text-slate-400' : Number(row.avg1) < 85 ? 'text-red-600' : 'text-emerald-600'}`}>{row.avg1 === '-' ? '-' : `${row.avg1}%`}</td>
+                    <td className={`py-3.5 px-4 font-black ${row.avg2 === '-' ? 'text-slate-400' : Number(row.avg2) < 85 ? 'text-red-600' : 'text-emerald-600'}`}>{row.avg2 === '-' ? '-' : `${row.avg2}%`}</td>
+                    <td className={`py-3.5 px-4 font-black ${row.avg3 === '-' ? 'text-slate-400' : Number(row.avg3) < 85 ? 'text-red-600' : 'text-emerald-600'}`}>{row.avg3 === '-' ? '-' : `${row.avg3}%`}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center justify-between pt-2 gap-3">
+          <p className="text-xs text-slate-600 font-medium">Menampilkan halaman {page3M} dari {totalPages3M} (Total {filtered3M.length} data CSR)</p>
+          <div className="flex items-center space-x-2">
+            <button disabled={page3M <= 1} onClick={() => setPage3M(p => p - 1)} className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition">Sebelumnya</button>
+            <button disabled={page3M >= totalPages3M} onClick={() => setPage3M(p => p + 1)} className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition">Berikutnya</button>
           </div>
         </div>
       </div>
@@ -1103,8 +1274,6 @@ export default function Tapping() {
       {showDetailModal && selectedDetailRecord && ReactDOM.createPortal(
         <div className={`fixed inset-0 bg-slate-950/70 backdrop-blur-md transition-opacity duration-200 flex items-center justify-center z-[99999] p-4 ${isClosingModal ? 'opacity-0' : 'animate-[fadeIn_0.2s_ease-out_forwards]'}`} onClick={handleCloseDetail}>
           <div className={`bg-slate-100 rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden border border-slate-300 transition-all duration-200 ${isClosingModal ? 'scale-95 opacity-0' : 'animate-[scaleUp_0.2s_ease-out_forwards]'}`} onClick={e => e.stopPropagation()}>
-            
-            {/* Header Modal (DENGAN TAMBAHAN KIP INTERACTION) */}
             <div className="bg-white px-6 py-4 border-b border-slate-200 flex items-center justify-between relative shadow-xs">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 rounded-xl bg-red-100 text-red-600 flex items-center justify-center text-sm font-bold shadow-sm">
@@ -1116,8 +1285,6 @@ export default function Tapping() {
                     <p className="text-[11px] font-semibold text-slate-500">
                       {selectedDetailRecord.nama} ({selectedDetailRecord.nik}) - {selectedDetailRecord.tanggal}
                     </p>
-                    
-                    {/* BAGIAN BADGE KIP INTERACTION */}
                     {selectedDetailRecord.rawData?.kip_interaction && selectedDetailRecord.rawData.kip_interaction.trim() !== '' && selectedDetailRecord.rawData.kip_interaction.trim() !== '-' && (
                       <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-[9px] font-black tracking-wide uppercase shadow-sm">
                         KIP: {selectedDetailRecord.rawData.kip_interaction}
@@ -1130,13 +1297,9 @@ export default function Tapping() {
                 <i className="fa-solid fa-xmark text-sm"></i>
               </button>
             </div>
-
-            {/* Body Modal (Render Detail Parameter & Catatan Terurai Berwarna) */}
             <div className="p-6 overflow-y-auto space-y-5 flex-1">
               {renderDetailParameters(selectedDetailRecord.rawData)}
             </div>
-
-            {/* Footer Modal */}
             <div className="bg-white px-6 py-4 border-t border-slate-200 flex justify-end shadow-inner">
               <button onClick={handleCloseDetail} className="px-5 py-2 bg-slate-900 hover:bg-slate-950 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer">
                 Tutup
@@ -1151,7 +1314,6 @@ export default function Tapping() {
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes scaleUp { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
       `}</style>
-
     </div>
   );
 }

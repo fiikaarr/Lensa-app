@@ -12,6 +12,7 @@ export default function PublicBmiForm() {
     nik_csr: '',
     nama_csr: '',
     job: 'CSR',
+    mitra: 'Infomedia', // Default Mitra
     jenisKelamin: 'Laki-Laki',
     region: '',
     cluster: '',
@@ -105,6 +106,7 @@ export default function PublicBmiForm() {
         nik_csr: cleanNik,
         nama_csr: found.nama_csr || '',
         job: found.job || 'CSR',
+        mitra: found.mitra || 'Infomedia',
         region: found.region || '',
         cluster: found.cluster || '',
         unit_name: found.unit_name || ''
@@ -115,6 +117,7 @@ export default function PublicBmiForm() {
         nik_csr: cleanNik,
         nama_csr: '',
         job: 'CSR',
+        mitra: 'Infomedia',
         region: '',
         cluster: '',
         unit_name: ''
@@ -143,6 +146,7 @@ export default function PublicBmiForm() {
         nik_csr: formData.nik_csr,
         nama_csr: formData.nama_csr,
         job: formData.job,
+        mitra: formData.mitra,
         jenis_kelamin: formData.jenisKelamin,
         region: formData.region,
         cluster: formData.cluster,
@@ -162,6 +166,7 @@ export default function PublicBmiForm() {
         ...prev,
         nik_csr: '',
         nama_csr: '',
+        mitra: 'Infomedia',
         region: '',
         cluster: '',
         unit_name: '',
@@ -180,7 +185,7 @@ export default function PublicBmiForm() {
     <div className="min-h-screen bg-slate-950 py-12 px-4 font-sans flex items-center justify-center">
       <div className="max-w-xl w-full bg-white rounded-[2rem] shadow-2xl p-8 md:p-10 border border-slate-100 space-y-6">
         
-        {/* Logo Bersih Tanpa Background Kotak */}
+        {/* Logo */}
         <div className="text-center space-y-4">
           <div className="w-full flex items-center justify-center pt-2">
             <img 
@@ -234,8 +239,8 @@ export default function PublicBmiForm() {
             />
           </div>
 
-          {/* Posisi & Jenis Kelamin */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {/* Posisi, Mitra & Jenis Kelamin */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
             <div className="space-y-1.5">
               <label className="block font-bold text-slate-800 tracking-wide text-xs">Posisi / Job</label>
               <input 
@@ -245,6 +250,20 @@ export default function PublicBmiForm() {
                 className="w-full px-4 py-3.5 bg-slate-100 border border-slate-200 rounded-2xl text-slate-700 font-bold cursor-not-allowed shadow-inner" 
               />
             </div>
+            
+            {/* INPUT MITRA */}
+            <div className="space-y-1.5">
+              <label className="block font-bold text-slate-800 tracking-wide text-xs">Mitra <span className="text-rose-600 font-black">*</span></label>
+              <select 
+                value={formData.mitra} 
+                onChange={e => setFormData({...formData, mitra: e.target.value})} 
+                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-300 rounded-2xl focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-600/10 outline-none font-bold text-slate-900 cursor-pointer transition shadow-inner"
+              >
+                <option value="Infomedia">Infomedia</option>
+                <option value="Lainnya">Lainnya</option>
+              </select>
+            </div>
+
             <div className="space-y-1.5">
               <label className="block font-bold text-slate-800 tracking-wide text-xs">Jenis Kelamin</label>
               <select 

@@ -5,6 +5,7 @@ import Header from './components/layout/Header';
 import Overview from './pages/Overview';
 import Readiness from './pages/Readiness';
 import Tapping from './pages/Tapping';
+import SalesRetensi from './pages/SalesRetensi'; // <-- 1. Import halaman SalesRetensi baru
 import Coaching from './pages/Coaching';
 import Tryout from './pages/Tryout';
 import ImportData from './pages/ImportData';
@@ -25,6 +26,9 @@ function PageTitleUpdater() {
         break;
       case '/tapping':
         document.title = 'Data Tapping CSR | Lensa Insight';
+        break;
+      case '/tapping/sales-retensi':
+        document.title = 'Fokus Sales & Retensi | Lensa Insight'; // <-- 2. Update judul tab untuk Sales-Retensi
         break;
       case '/coaching':
         document.title = 'Data Coaching | Lensa Insight';
@@ -64,6 +68,7 @@ function MainLayout({ userRole, onLogout }) {
             <Route path="/" element={<Overview />} />
             <Route path="/readiness" element={<Readiness />} />
             <Route path="/tapping" element={<Tapping />} />
+            <Route path="/tapping/sales-retensi" element={<SalesRetensi />} /> {/* <-- 3. Daftarkan rute Sales-Retensi */}
             <Route path="/tryout" element={<Tryout />} />
             <Route path="/bmi-monitoring" element={<BmiMonitoring />} />
             <Route path="/coaching" element={<Coaching />} />
