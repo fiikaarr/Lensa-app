@@ -96,13 +96,14 @@ export default function Readiness() {
   const chartRegionalInstance = useRef(null);
   const chartTopUnitInstance = useRef(null);
 
+  // Fetch data otomatis dari server berdasarkan rentang tanggal filter
   useEffect(() => {
     loadReadinessData();
-  }, []);
+  }, [filterStartDate, filterEndDate]);
 
   useEffect(() => {
     applyReadinessFilter();
-  }, [globalReadinessData, filterStartDate, filterEndDate, filterRegion, filterSource, searchReadiness, masterUnitList]);
+  }, [globalReadinessData, filterRegion, filterSource, searchReadiness, masterUnitList]);
 
   // Reset halaman ke 1 setiap kali filter atau pencarian berubah
   useEffect(() => {
@@ -166,13 +167,30 @@ export default function Readiness() {
 
   const parseExcelDate = (dateVal) => {
     if (!dateVal) return new Date().toISOString().slice(0, 10);
-    if (typeof dateVal === 'string' && dateVal.includes('-')) {
-      let parts = dateVal.split('-');
-      if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    if (typeof dateVal === 'number') {
+      const utc_days = Math.floor(dateVal - 25569);
+      const utc_value = utc_days * 86400;
+      const date_info = new Date(utc_value * 1000);
+      return date_info.toISOString().slice(0, 10);
     }
-    return dateVal;
+    if (typeof dateVal === 'string') {
+      let trimmed = dateVal.trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+        return trimmed.slice(0, 10);
+      }
+      let parts = trimmed.split(/[-/]/);
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        } else {
+          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+      }
+    }
+    return new Date().toISOString().slice(0, 10);
   };
 
+  // Mengambil data dari Supabase dengan Query Ganda (Pemisahan Query Manual agar tidak tertimbun ribuan baris Excel)
   const loadReadinessData = async () => {
     try {
       let raisaRes = await supabase.from('database_raisa').select('*');
@@ -185,11 +203,47 @@ export default function Readiness() {
         setAvailableRegions(Array.from(new Set(regExtracted)).sort());
       }
 
-      let readinessRes = await supabase.from('database_readiness').select('*').order('tanggal', { ascending: false });
-      if (readinessRes.data) {
-        setGlobalReadinessData(readinessRes.data);
+      let startStr = filterStartDate ? filterStartDate.toString().slice(0, 10) : '';
+      let endStr = filterEndDate ? filterEndDate.toString().slice(0, 10) : '';
+
+      // 1. Query utama untuk data keseluruhan (Excel & lainnya) dengan limit 5000
+      let query = supabase
+        .from('database_readiness')
+        .select('*')
+        .order('tanggal', { ascending: false })
+        .limit(5000);
+
+      if (startStr && endStr) {
+        query = query.gte('tanggal', startStr).lte('tanggal', endStr);
+      }
+
+      let readinessRes = await query;
+      let fetchedData = readinessRes.data || [];
+
+      // 2. Query khusus untuk TEMUAN MANUAL agar dijamin tampil utuh dan tidak tertimbun baris Excel
+      let manualQuery = supabase
+        .from('database_readiness')
+        .select('*')
+        .ilike('sumber', '%manual%')
+        .order('tanggal', { ascending: false })
+        .limit(1000);
+
+      if (startStr && endStr) {
+        manualQuery = manualQuery.gte('tanggal', startStr).lte('tanggal', endStr);
+      }
+
+      let manualRes = await manualQuery;
+      if (manualRes.data) {
+        let manualIds = new Set(manualRes.data.map(m => m.id));
+        let combined = [...manualRes.data];
+        fetchedData.forEach(item => {
+          if (!manualIds.has(item.id)) {
+            combined.push(item);
+          }
+        });
+        setGlobalReadinessData(combined);
       } else {
-        setGlobalReadinessData([]);
+        setGlobalReadinessData(fetchedData);
       }
     } catch (err) {
       console.warn("Error loading readiness:", err.message);
@@ -216,19 +270,18 @@ export default function Readiness() {
       let sumber = (row.sumber || "").toLowerCase();
       let isManual = sumber.includes('manual');
       let matchSearch = searchReadiness === "" || (row.unit_name && row.unit_name.toLowerCase().includes(searchReadiness.toLowerCase()));
-      let matchDate = !filterStartDate || !filterEndDate || (row.tanggal >= filterStartDate && row.tanggal <= filterEndDate);
       
       let matchRegion = true;
       if (allowedUnitsSet) {
         matchRegion = allowedUnitsSet.has(normalizeUnitName(row.unit_name));
       }
 
-      if (isManual && matchSearch && matchDate && matchRegion) {
+      if (isManual && matchSearch && matchRegion) {
         manualList.push(row);
       }
 
       let matchSource = filterSource === 'ALL' || (filterSource === 'Excel' && sumber.includes('excel')) || (filterSource === 'Manual' && sumber.includes('manual'));
-      if (matchSource && matchSearch && matchDate && matchRegion) {
+      if (matchSource && matchSearch && matchRegion) {
         analyticalList.push(row);
       }
     }
@@ -237,7 +290,8 @@ export default function Readiness() {
 
     let evalDate = filterEndDate || new Date().toISOString().slice(0, 10);
     let raisaToday = globalReadinessData.filter(r => {
-      let dateMatch = r.tanggal === evalDate && (r.sumber || "").toLowerCase().includes('excel');
+      let rDateStr = (r.tanggal || "").toString().slice(0, 10);
+      let dateMatch = rDateStr === evalDate && (r.sumber || "").toLowerCase().includes('excel');
       if (!dateMatch) return false;
       if (allowedUnitsSet) {
         return allowedUnitsSet.has(normalizeUnitName(r.unit_name));
@@ -288,9 +342,10 @@ export default function Readiness() {
     let dailyMap = {};
     for (let r of records) {
       if (r.tanggal) {
-        if (!dailyMap[r.tanggal]) dailyMap[r.tanggal] = { aman: 0, temuan: 0 };
-        if ((r.status || "").toLowerCase().includes('temuan')) dailyMap[r.tanggal].temuan++;
-        else dailyMap[r.tanggal].aman++;
+        let cleanDate = r.tanggal.toString().slice(0, 10);
+        if (!dailyMap[cleanDate]) dailyMap[cleanDate] = { aman: 0, temuan: 0 };
+        if ((r.status || "").toLowerCase().includes('temuan')) dailyMap[cleanDate].temuan++;
+        else dailyMap[cleanDate].aman++;
       }
     }
 
@@ -417,7 +472,6 @@ export default function Readiness() {
       checkedVals = [0];
     }
 
-    // Mengubah warna batang Total Unit agar semuanya merah seragam seperti Kalimantan
     let colors = regLabels.map(() => '#E11D48');
 
     let ctx = regionalChartRef.current.getContext('2d');
@@ -560,7 +614,7 @@ export default function Readiness() {
     let target = globalReadinessData.find(r => r.id === id);
     if (target) {
       setEditId(target.id);
-      setEditDate(target.tanggal || '');
+      setEditDate(target.tanggal ? target.tanggal.toString().slice(0, 10) : '');
       setEditUnit(target.unit_name || '');
       setEditKategori(target.kategori || '-');
       setEditCatatan(target.catatan || '');
@@ -895,7 +949,7 @@ export default function Readiness() {
                   return (
                     <tr key={record.id} className="hover:bg-slate-50 transition border-b border-slate-100 h-[64px] align-middle">
                       <td className="py-2 px-3 text-slate-600 font-semibold truncate">
-                        {record.tanggal || '-'}
+                        {record.tanggal ? record.tanggal.toString().slice(0, 10) : '-'}
                       </td>
                       <td className="py-2 px-3 text-slate-900 font-bold truncate">
                         {record.unit_name || '-'}
@@ -1055,7 +1109,7 @@ export default function Readiness() {
               <button onClick={() => closeModalWithAnimation(setShowViewModal)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-200 text-slate-600 hover:bg-rose-500 hover:text-white transition-colors cursor-pointer"><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="p-6 overflow-y-auto space-y-4 text-xs text-slate-700">
-              <div><strong className="text-slate-500 uppercase text-[10px] block mb-1">Tanggal:</strong> <span className="font-bold text-slate-900">{selectedRecord.tanggal}</span></div>
+              <div><strong className="text-slate-500 uppercase text-[10px] block mb-1">Tanggal:</strong> <span className="font-bold text-slate-900">{selectedRecord.tanggal ? selectedRecord.tanggal.toString().slice(0, 10) : '-'}</span></div>
               <div><strong className="text-slate-500 uppercase text-[10px] block mb-1">Unit GraPARI:</strong> <span className="font-bold text-slate-900">{selectedRecord.unit_name}</span></div>
               <div><strong className="text-slate-500 uppercase text-[10px] block mb-1">Sumber Data:</strong> <span className="font-bold text-slate-900">{selectedRecord.sumber}</span></div>
               <div><strong className="text-slate-500 uppercase text-[10px] block mb-1">Status:</strong> <span className="font-bold text-slate-900">{selectedRecord.status}</span></div>
