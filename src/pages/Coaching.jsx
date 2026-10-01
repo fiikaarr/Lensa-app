@@ -508,10 +508,33 @@ export default function Coaching() {
     }
   }, [filteredList]);
 
+  // Fungsi export Excel yang menarik seluruh data sesuai range periode dan filter aktif
   const exportExcel = () => {
-    const table = document.getElementById("coachTableElement");
-    const wb = XLSX.utils.table_to_book(table, { sheet: "Data_Coaching" });
-    XLSX.writeFile(wb, "Data_Coaching_Lensa.xlsx");
+    if (!filteredList || filteredList.length === 0) {
+      showToast("Tidak Ada Data", "Tidak ada data untuk diunduh pada rentang periode atau filter yang dipilih.", "warning");
+      return;
+    }
+
+    const dataToExport = filteredList.map(row => ({
+      "Tanggal": row.tanggal || '',
+      "Region": row.region || '',
+      "Cluster": row.cluster || '',
+      "Unit Name": row.unitName || '',
+      "Nama CSR": row.nama || '',
+      "NIK CSR": row.nik || '',
+      "Job": row.job || '',
+      "Tipe": row.tipe || '',
+      "Jenis Temuan": row.area || '',
+      "Status": row.status || '',
+      "Akar Masalah (Root Cause)": row.rootCause || row.root_cause || '',
+      "Komitmen / Action Plan": row.komitmen || '',
+      "Link Eviden": row.fileUrl || row.link_eviden || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data_Coaching");
+    XLSX.writeFile(workbook, `Data_Coaching_${filterPeriode || 'Semua'}_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (

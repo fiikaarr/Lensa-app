@@ -774,6 +774,26 @@ export default function BmiMonitoring() {
                   const isOverOrObe = kat.includes('Overweight') || kat.includes('Obesitas');
                   const isUnder = kat.includes('Kekurangan');
 
+                  // Kalkulasi Target Berat Badan Otomatis
+                  const tinggiM = Number(item.tinggi_badan) / 100;
+                  const beratBadan = Number(item.berat_badan);
+                  let actionText = 'IDEAL';
+                  let actionClass = 'bg-emerald-600 text-white';
+
+                  if (tinggiM > 0 && beratBadan > 0) {
+                    if (isOverOrObe) {
+                      const maxIdealWeight = 24.9 * (tinggiM * tinggiM);
+                      const diff = Math.round(beratBadan - maxIdealWeight);
+                      actionText = `Turunkan BB ${diff > 0 ? diff : 1} kg`;
+                      actionClass = 'bg-rose-600 text-white';
+                    } else if (isUnder) {
+                      const minIdealWeight = 18.5 * (tinggiM * tinggiM);
+                      const diff = Math.round(minIdealWeight - beratBadan);
+                      actionText = `Naikkan BB ${diff > 0 ? diff : 1} kg`;
+                      actionClass = 'bg-amber-500 text-white';
+                    }
+                  }
+
                   return (
                     <tr key={item.id || item.nik_csr} className="hover:bg-slate-100/80 transition duration-200">
                       <td className="py-3 px-4 font-medium text-slate-600">{item.tanggal}</td>
@@ -788,7 +808,7 @@ export default function BmiMonitoring() {
                       <td className="py-3 px-4 font-bold">
                         <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] ${
                           kat.includes('Normal') ? 'bg-emerald-100 text-emerald-800' :
-                          isUnder ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                          isUnder ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
                         }`}>
                           {item.kategori}
                         </span>
@@ -801,13 +821,9 @@ export default function BmiMonitoring() {
                         ) : <span className="text-slate-400 italic">Tidak ada</span>}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        {isOverOrObe ? (
-                          <span className="inline-block px-3 py-1 bg-rose-600 text-white rounded-xl text-[10px] font-black shadow-sm uppercase tracking-wider">Turunkan BB</span>
-                        ) : isUnder ? (
-                          <span className="inline-block px-3 py-1 bg-amber-500 text-white rounded-xl text-[10px] font-black shadow-sm uppercase tracking-wider">Naikkan BB</span>
-                        ) : (
-                          <span className="inline-block px-3 py-1 bg-emerald-600 text-white rounded-xl text-[10px] font-black shadow-sm uppercase tracking-wider">Ideal</span>
-                        )}
+                        <span className={`inline-block px-3 py-1 rounded-xl text-[10px] font-black shadow-sm uppercase tracking-wider ${actionClass}`}>
+                          {actionText}
+                        </span>
                       </td>
                     </tr>
                   );
@@ -822,6 +838,7 @@ export default function BmiMonitoring() {
             <span className="text-slate-500 font-medium">
               Menampilkan <span className="font-bold text-slate-800">{indexOfFirstRow + 1}</span> sampai <span className="font-bold text-slate-800">{Math.min(indexOfLastRow, filteredData.length)}</span> dari <span className="font-bold text-slate-800">{filteredData.length}</span> data
             </span>
+
             <div className="flex items-center gap-2">
               <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 font-bold rounded-xl transition cursor-pointer">
                 <i className="fa-solid fa-chevron-left mr-1.5 text-[10px]"></i> Sebelumnya
@@ -902,6 +919,7 @@ export default function BmiMonitoring() {
             <span className="text-slate-500 font-medium">
               Menampilkan <span className="font-bold text-slate-800">{indexOfFirstUnsub + 1}</span> sampai <span className="font-bold text-slate-800">{Math.min(indexOfLastUnsub, unsubmittedList.length)}</span> dari <span className="font-bold text-slate-800">{unsubmittedList.length}</span> data
             </span>
+
             <div className="flex items-center gap-2">
               <button onClick={() => setPageUnsubmitted(prev => Math.max(prev - 1, 1))} disabled={pageUnsubmitted === 1} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-bold rounded-xl transition cursor-pointer">
                 <i className="fa-solid fa-chevron-left mr-1 text-[9px]"></i> Prev
@@ -988,6 +1006,7 @@ export default function BmiMonitoring() {
             <span className="text-slate-500 font-medium">
               Menampilkan <span className="font-bold text-slate-800">{indexOfFirstStreak + 1}</span> sampai <span className="font-bold text-slate-800">{Math.min(indexOfLastStreak, streakList.length)}</span> dari <span className="font-bold text-slate-800">{streakList.length}</span> data
             </span>
+
             <div className="flex items-center gap-2">
               <button onClick={() => setPageStreak(prev => Math.max(prev - 1, 1))} disabled={pageStreak === 1} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-bold rounded-xl transition cursor-pointer">
                 <i className="fa-solid fa-chevron-left mr-1 text-[9px]"></i> Prev
