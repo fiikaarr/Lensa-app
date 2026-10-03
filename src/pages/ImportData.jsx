@@ -173,13 +173,15 @@ export default function ImportData({ onNavigate }) {
       "soal_salah": "soal_salah", "pengerjaan": "pengerjaan", "keterangan_1": "keterangan_1"
     },
     csr: {
+      // Mapping otomatis termasuk Role to job
       "region": "region", "regional": "region",
-      "cluster": "cluster",
-      "unit_name": "unit_name", "unitname": "unit_name", "nama_grapari": "unit_name",
-      "nama_csr": "nama_csr", "nama": "nama_csr", "nama_lengkap": "nama_csr",
-      "nik_csr": "nik_csr", "nik": "nik_csr", "siad": "nik_csr",
+      "cluster_service": "cluster", "cluster": "cluster",
+      "grapari": "unit_name", "unit_name": "unit_name", "unitname": "unit_name", "nama_grapari": "unit_name",
+      "mitra": "mitra", "vendor": "mitra",
+      "nama": "nama_csr", "nama_csr": "nama_csr", "nama_lengkap": "nama_csr",
+      "nik": "nik_csr", "nik_csr": "nik_csr", "siad": "nik_csr",
       "email": "email",
-      "job": "job", "posisi": "job",
+      "job": "job", "posisi": "job", "job_role": "job", "role": "job",
       "contact": "contact", "phone": "contact", "telepon": "contact"
     }
   };

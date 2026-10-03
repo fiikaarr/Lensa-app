@@ -12,7 +12,7 @@ export default function PublicBmiForm() {
     nik_csr: '',
     nama_csr: '',
     job: 'CSR',
-    mitra: 'Infomedia', // Default Mitra
+    mitra: '', // Diambil murni dari database_csr tanpa hardcode
     jenisKelamin: 'Laki-Laki',
     region: '',
     cluster: '',
@@ -106,7 +106,7 @@ export default function PublicBmiForm() {
         nik_csr: cleanNik,
         nama_csr: found.nama_csr || '',
         job: found.job || 'CSR',
-        mitra: found.mitra || 'Infomedia',
+        mitra: found.mitra || found.vendor || '', // Murni dari database_csr
         region: found.region || '',
         cluster: found.cluster || '',
         unit_name: found.unit_name || ''
@@ -117,7 +117,7 @@ export default function PublicBmiForm() {
         nik_csr: cleanNik,
         nama_csr: '',
         job: 'CSR',
-        mitra: 'Infomedia',
+        mitra: '',
         region: '',
         cluster: '',
         unit_name: ''
@@ -166,7 +166,7 @@ export default function PublicBmiForm() {
         ...prev,
         nik_csr: '',
         nama_csr: '',
-        mitra: 'Infomedia',
+        mitra: '',
         region: '',
         cluster: '',
         unit_name: '',
@@ -251,17 +251,16 @@ export default function PublicBmiForm() {
               />
             </div>
             
-            {/* INPUT MITRA */}
+            {/* MITRA (Auto-fill murni dari database_csr) */}
             <div className="space-y-1.5">
-              <label className="block font-bold text-slate-800 tracking-wide text-xs">Mitra <span className="text-rose-600 font-black">*</span></label>
-              <select 
+              <label className="block font-bold text-slate-800 tracking-wide text-xs">Mitra <span className="text-slate-400 font-medium">(Auto-Fill)</span></label>
+              <input 
+                type="text" 
                 value={formData.mitra} 
-                onChange={e => setFormData({...formData, mitra: e.target.value})} 
-                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-300 rounded-2xl focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-600/10 outline-none font-bold text-slate-900 cursor-pointer transition shadow-inner"
-              >
-                <option value="Infomedia">Infomedia</option>
-                <option value="Lainnya">Lainnya</option>
-              </select>
+                readOnly 
+                placeholder="Mitra..." 
+                className="w-full px-4 py-3.5 bg-slate-100 border border-slate-200 rounded-2xl text-slate-700 font-bold cursor-not-allowed shadow-inner" 
+              />
             </div>
 
             <div className="space-y-1.5">
