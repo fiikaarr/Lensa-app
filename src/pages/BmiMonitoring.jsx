@@ -181,6 +181,9 @@ export default function BmiMonitoring() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
+  // State khusus pencarian tabel histori 3 pengukuran
+  const [historySearch, setHistorySearch] = useState('');
+
   // Filter States (Multiple Select Arrays)
   const [selectedPeriodes, setSelectedPeriodes] = useState([currentMonthStr]);
   const [selectedRegions, setSelectedRegions] = useState([]);
@@ -226,18 +229,39 @@ export default function BmiMonitoring() {
     };
   }, []);
 
+  // Fetch data dengan teknik looping range untuk bypass limit 1000 baris Supabase
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      const [bmiRes, csrRes] = await Promise.all([
-        supabase.from('database_bmi').select('*'),
-        supabase.from('database_csr').select('*')
-      ]);
-
-      if (bmiRes.error) throw bmiRes.error;
+      const csrRes = await supabase.from('database_csr').select('*');
       if (csrRes.error) throw csrRes.error;
 
-      setBmiData(bmiRes.data || []);
+      let allBmiData = [];
+      let page = 0;
+      let pageSize = 1000;
+      let fetchMore = true;
+
+      while (fetchMore) {
+        const { data, error } = await supabase
+          .from('database_bmi')
+          .select('*')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allBmiData = [...allBmiData, ...data];
+          if (data.length < pageSize) {
+            fetchMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          fetchMore = false;
+        }
+      }
+
+      setBmiData(allBmiData);
       setCsrData(csrRes.data || []);
     } catch (err) {
       console.error("Gagal memuat data:", err.message);
@@ -333,7 +357,7 @@ export default function BmiMonitoring() {
     }
   };
 
-  // Logika Filter Utama
+  // Logika Filter Utama (terikat periode, region, cluster, mitra, job, kategori, search)
   const filteredData = bmiData.filter(item => {
     const reg = getRecordRegion(item);
     const cls = getRecordCluster(item);
@@ -402,7 +426,7 @@ export default function BmiMonitoring() {
   const currentRows = filteredData.slice(indexOfFirstRow, indexOfLastRow);
   const totalPages = Math.ceil(filteredData.length / rowsPerPage) || 1;
 
-  // Statistik dihitung berdasarkan data unik per NIK per bulan
+  // Statistik dihitung berdasarkan data unik per NIK per bulan (mengikuti filter periode)
   const totalSubmissions = uniqueStatsData.length;
   const idealCount = uniqueStatsData.filter(i => i.kategori && i.kategori.includes('Normal')).length;
   const overweightCount = uniqueStatsData.filter(i => i.kategori && (i.kategori.includes('Overweight') || i.kategori.includes('Obesitas'))).length;
@@ -489,11 +513,14 @@ export default function BmiMonitoring() {
       const matchCluster = selectedClusters.length === 0 || selectedClusters.includes(item.cluster);
       const matchMitra = selectedMitras.length === 0 || selectedMitras.includes(item.mitra);
       const matchJob = selectedJobs.length === 0 || selectedJobs.includes(item.job);
-      const matchSearch = !searchTerm || 
-        String(item.nik_csr || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(item.nama_csr || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(item.unit_name || '').toLowerCase().includes(searchTerm.toLowerCase());
-      return matchRegion && matchCluster && matchMitra && matchJob && matchSearch;
+      
+      // Pencarian khusus untuk tabel histori (NIK, Nama, Unit Name / GraPARI)
+      const matchHistorySearch = !historySearch || 
+        String(item.nik_csr || '').toLowerCase().includes(historySearch.toLowerCase()) ||
+        String(item.nama_csr || '').toLowerCase().includes(historySearch.toLowerCase()) ||
+        String(item.unit_name || '').toLowerCase().includes(historySearch.toLowerCase());
+
+      return matchRegion && matchCluster && matchMitra && matchJob && matchHistorySearch;
     }).sort((a, b) => {
       let valA, valB;
       if (historySortField === 'meas1') {
@@ -546,7 +573,7 @@ export default function BmiMonitoring() {
     exportToExcel(dataToExport, 'Riwayat_3_Pengukuran_SDM');
   };
 
-  // Helper untuk membuat Dataset Chart Bar (Regional & Job) menggunakan uniqueStatsData
+  // Helper untuk membuat Dataset Chart Bar (Regional & Job) menggunakan uniqueStatsData (mengikuti filter periode)
   const generateChartDataByGroup = (groupKey) => {
     const groups = Array.from(new Set(uniqueStatsData.map(i => {
       if (groupKey === 'region') return getRecordRegion(i);
@@ -585,7 +612,7 @@ export default function BmiMonitoring() {
     };
   };
 
-  // Helper untuk Line Chart Tren Waktu Pengukuran menggunakan uniqueStatsData
+  // Helper untuk Line Chart Tren Waktu Pengukuran menggunakan uniqueStatsData (mengikuti filter periode)
   const generateMonthlyTrendData = () => {
     const months = Array.from(
       new Set(
@@ -711,7 +738,7 @@ export default function BmiMonitoring() {
         </div>
       </div>
 
-      {/* Kartu Statistik dengan Ilustrasi Siluet Tubuh Manusia (Unik per NIK per Bulan) */}
+      {/* Kartu Statistik dengan Ilustrasi Siluet Tubuh Manusia (Unik per NIK per Bulan - Mengikuti Filter Periode) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 p-5 rounded-3xl border border-slate-400 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:border-slate-500 cursor-pointer flex items-center justify-between">
           <div className="space-y-2">
@@ -769,7 +796,7 @@ export default function BmiMonitoring() {
         </div>
       </div>
 
-      {/* Chart Visualisasi Data */}
+      {/* Chart Visualisasi Data (Mengikuti Filter Periode) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-gradient-to-br from-cyan-50/80 via-white to-sky-50/80 p-6 rounded-3xl border border-cyan-200 shadow-sm space-y-3 flex flex-col justify-between">
           <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
@@ -802,7 +829,7 @@ export default function BmiMonitoring() {
         </div>
       </div>
 
-      {/* Tabel Utama Riwayat BMI */}
+      {/* Tabel Utama Riwayat BMI (Mengikuti Filter Periode) */}
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
@@ -1003,17 +1030,27 @@ export default function BmiMonitoring() {
         )}
       </div>
 
-      {/* --- TABEL TAMBAHAN 2: Riwayat 3 Pengukuran Terakhir per SDM --- */}
+      {/* --- TABEL TAMBAHAN 2: Riwayat 3 Pengukuran Terakhir per SDM (DENGAN PENCARIAN KHUSUS NIK, NAMA, UNIT) --- */}
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <h4 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
               <i className="fa-solid fa-clock-rotate-left text-indigo-600"></i> Riwayat 3 Pengukuran Terakhir per SDM
             </h4>
-            <p className="text-[11px] text-slate-500 mt-0.5">Daftar riwayat status BMI (Pengukuran 1, Pengukuran 2, dan Pengukuran 3) untuk setiap SDM.</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Daftar riwayat status BMI (Pengukuran 1, 2, dan 3) untuk setiap SDM dari keseluruhan waktu.</p>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="px-3 py-1 bg-indigo-100 text-indigo-800 font-black text-xs rounded-xl">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <input 
+              type="text"
+              placeholder="Cari NIK, Nama, Unit..."
+              value={historySearch}
+              onChange={(e) => {
+                setHistorySearch(e.target.value);
+                setPageHistory(1);
+              }}
+              className="px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-indigo-600 w-full sm:w-52 shadow-inner"
+            />
+            <span className="px-3 py-2 bg-indigo-100 text-indigo-800 font-black text-xs rounded-xl">
               Total: {historyList.length} Orang
             </span>
             <button 
